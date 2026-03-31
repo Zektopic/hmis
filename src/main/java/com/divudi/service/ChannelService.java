@@ -88,10 +88,12 @@ import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -375,6 +377,9 @@ public class ChannelService {
         int nextNumber = 0;
         int activePatientCount = 0;
 
+        List<Integer> reservedNumbersList = CommonFunctions.convertStringToIntegerList(session.getOriginatingSession().getReserveNumbers());
+        Set<Integer> reservedNumbers = new HashSet<>(reservedNumbersList);
+
         if (billSessionList != null && !billSessionList.isEmpty()) {
             for (BillSession bs : billSessionList) {
                 if (bs.getBill().getBillTypeAtomic() != BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT) {
@@ -387,9 +392,15 @@ public class ChannelService {
                 }
             }
         }
+        nextNumber++;
+
+        // check for reserved numbers
+        while (reservedNumbers.contains(nextNumber)) {
+            nextNumber++;
+        }
 
         Map data = new HashMap();
-        data.put("nextNumber", ++nextNumber);
+        data.put("nextNumber", nextNumber);
         data.put("activePatients", activePatientCount);
 
         return data;
@@ -1031,7 +1042,7 @@ public class ChannelService {
         return getBillSessionFacade().findByJpql(sql, hh, TemporalType.DATE);
     }
 
-    public List getReleasedAppoinmentNumbersForApiBookings(SessionInstance ss) {
+    public List getReleasedAppoinmentNumbersForApiBookings(SessionInstance ss, List<Integer> reservedNumbers) {
         long nextNumber = 1L;
 
         if (ss.getNextAvailableAppointmentNumber() != null) {
@@ -1046,19 +1057,27 @@ public class ChannelService {
                 .map(BillSession::getSerialNo)
                 .collect(Collectors.toList());
 
+        // include reserve numbers
+        Set<Integer> unavailableNumbers = new HashSet<>(reservedSerialNumbers);
+        unavailableNumbers.addAll(reservedNumbers);
+
         for (int i = 1; i < nextNumber; ++i) {
-            boolean isAssign = false;
-            for (Integer number : reservedSerialNumbers) {
-                if (i == number) {
-                    isAssign = true;
+            // boolean isAssign = false;
+            // for (Integer number : reservedSerialNumbers) {
+            //     if (i == number) {
+            //         isAssign = true;
 
-                }
-            }
-
-            if (!isAssign) {
+            //     }
+            // }
+            if (!unavailableNumbers.contains(i)) {
                 releasedNumberList.add(i);
             }
+
+            // if (!isAssign) {
+            //     releasedNumberList.add(i);
+            // }
         }
+
         return releasedNumberList;
     }
 
@@ -1263,17 +1282,17 @@ public class ChannelService {
         bs.setSessionTime(session.getSessionTime());
         bs.setStaff(session.getStaff());
 
-        // List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(session.getOriginatingSession().getReserveNumbers());
+        List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(session.getOriginatingSession().getReserveNumbers());
         Integer count = null;
 
-        List<Integer> availableReleasedApoinmentNumbers = getReleasedAppoinmentNumbersForApiBookings(session);
+        List<Integer> availableReleasedApoinmentNumbers = getReleasedAppoinmentNumbersForApiBookings(session, reservedNumbers);
         Random rand = new Random();
         if (availableReleasedApoinmentNumbers != null && !availableReleasedApoinmentNumbers.isEmpty()) {
             count = availableReleasedApoinmentNumbers.get(rand.nextInt(availableReleasedApoinmentNumbers.size()));
         }
 
         if (count == null) {
-            count = serviceSessionBean.getNextNonReservedSerialNumber(session, Collections.EMPTY_LIST);
+            count = serviceSessionBean.getNextNonReservedSerialNumber(session, reservedNumbers);
         }
 
         if (count != null) {
@@ -2497,13 +2516,17 @@ public class ChannelService {
             if (ss.getBookedPatientCount() != null) {
                 int maxNo = ss.getMaxNo();
                 long bookedPatientCount = ss.getBookedPatientCount();
+                long reservedBookingCount = ss.getReservedBookingCount() != null ? ss.getReservedBookingCount() : 0L;
                 long totalPatientCount;
 
                 List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(ss.getReserveNumbers());
                 if (false) {
                     bookedPatientCount = bookedPatientCount;
                 } else {
-                    bookedPatientCount = bookedPatientCount + reservedNumbers.size();
+                    // bookedPatientCount = bookedPatientCount + reservedNumbers.size();
+
+                    // Avoid same reserved serial no being counted as reserved booking and reserved number
+                    bookedPatientCount = bookedPatientCount + reservedNumbers.size() - reservedBookingCount;
                 }
 
                 if (ss.getCancelPatientCount() != null) {
