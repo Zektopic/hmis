@@ -160,12 +160,6 @@ public class EmailManagerEjb {
         }
     }
 
-//    @SuppressWarnings("unused")
-//    @Schedule(second = "59", minute = "*/2", hour = "*", persistent = false)
-//    public void myTimer() {
-////        sendReportApprovalEmails();
-//
-//    }
     private boolean sendEmailViaRestGateway(String subject, String body, List<String> recipients, boolean isHtml) {
         String messengerServiceURL = configOptionApplicationController.getShortTextValueByKey("Email Gateway - URL", "");
 
