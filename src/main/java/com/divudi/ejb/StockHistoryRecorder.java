@@ -68,11 +68,6 @@ public class StockHistoryRecorder {
     @EJB
     PharmacyBean pharmacyBean;
 
-//    @SuppressWarnings("unused")
-//    @Schedule(minute = "1", second = "1", dayOfMonth = "*", month = "*", year = "*", hour = "1", persistent = false)
-//    @Schedule(minute = "*", second = "10", dayOfMonth = "*", month = "*", year = "*", hour = "*", persistent = false)
-//    @Schedule(minute = "59", second = "59", hour = "23", dayOfMonth = "Last", info = "2nd Scheduled Timer", persistent = false)
-//    @Schedule(second="*/1", minute="*",hour="*", persistent=false)
     public void myTimer() {
         Date startTime = new Date();
         ////System.out.println("Start writing stock history: " + startTime);
@@ -121,45 +116,6 @@ public class StockHistoryRecorder {
         ////System.out.println("End writing stock history: " + new Date());
 //        ////System.out.println("TIme taken for Hx is " + (((new Date()) - startTime )/(1000*60*60)) + " minutes.");
     }
-
-    @SuppressWarnings("unused")
-//    @Schedule(hour = "00", minute = "15", second = "00", dayOfMonth = "*", info = "Daily Mid Night", persistent = false)
-    public void myTimerDaily() {
-        Date startTime = new Date();
-        for (FeeChange fc : fetchFeeChanges()) {
-            if (fc.getFee().getStaff() != null) {
-            }
-            for (ItemFee f : fetchServiceSessionFees(fc.getFee().getFeeType(), fc.getFee().getName(), fc.getFee().getStaff())) {
-                //System.out.println("1.f.getFee() = " + f.getFee());
-                f.setFee(f.getFee() + fc.getFee().getFee());
-                //System.out.println("2.f.getFee() = " + f.getFee());
-                f.setFfee(f.getFfee() + fc.getFee().getFfee());
-                getItemFeeFacade().edit(f);
-            }
-            fc.setDoneAt(new Date());
-            fc.setDone(true);
-            getFeeChangeFacade().edit(fc);
-        }
-        ////System.out.println("End writing stock history: " + new Date());
-//        ////System.out.println("TIme taken for Hx is " + (((new Date()) - startTime )/(1000*60*60)) + " minutes.");
-    }
-
-//    @SuppressWarnings("unused")
-//    @Schedule(hour = "03", minute = "15", second = "00", dayOfMonth = "*", info = "Daily Mornining", persistent = false)
-//    public void myTimerDailyChannelShedule() {
-//        Date startTime = new Date();
-//        //System.out.println("Start Create Shedule " + startTime);
-//
-//        for (Staff s : staffs()) {
-//            generateSessions(s);
-//        }
-//
-//        //System.out.println("Start and End Create Shedule " + startTime + " - " + new Date());
-//
-//        ////System.out.println("End writing stock history: " + new Date());
-////        ////System.out.println("TIme taken for Hx is " + (((new Date()) - startTime )/(1000*60*60)) + " minutes.");
-//    }
-
 
 
     public List<Staff> staffs() {
