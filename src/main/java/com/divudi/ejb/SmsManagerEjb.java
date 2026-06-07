@@ -190,7 +190,6 @@ public class SmsManagerEjb {
     }
 
     // Schedule sendSmsToDoctorsBeforeSession to run every 30 minutes
-    @SuppressWarnings("unused")
     @Schedule(second = "*", minute = "*/1", hour = "*", persistent = false)
     public void sendSmsToDoctorsBeforeSessionTimer() {
         if (doNotSendAnySms) {
