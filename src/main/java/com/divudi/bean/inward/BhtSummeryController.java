@@ -1238,19 +1238,22 @@ public class BhtSummeryController implements Serializable {
             return true;
         }
 
-        if (patientRooms == null || patientRooms.isEmpty()) {
-            JsfUtil.addErrorMessage("Room must be assigned before discharge");
-            return true;
-        }
+        if (getPatientEncounter().getAdmissionType() != null
+                && getPatientEncounter().getAdmissionType().isRoomChargesAllowed()) {
+            if (patientRooms == null || patientRooms.isEmpty()) {
+                JsfUtil.addErrorMessage("Room must be assigned before discharge");
+                return true;
+            }
 
-        if (checkRoomIsDischarged()) {
-            JsfUtil.addErrorMessage("Please Discharged From Room");
-            return true;
-        }
+            if (checkRoomIsDischarged()) {
+                JsfUtil.addErrorMessage("Please Discharged From Room");
+                return true;
+            }
 
-        if (getInwardBean().checkRoomDischarge(date, getPatientEncounter())) {
-            JsfUtil.addErrorMessage("Check Discharge Time should be after Room Discharge Time");
-            return true;
+            if (getInwardBean().checkRoomDischarge(date, getPatientEncounter())) {
+                JsfUtil.addErrorMessage("Check Discharge Time should be after Room Discharge Time");
+                return true;
+            }
         }
 
         return false;
@@ -1726,11 +1729,12 @@ public class BhtSummeryController implements Serializable {
             JsfUtil.addErrorMessage("Warning: Clinical discharge has not been confirmed for this patient.");
         }
 
-        if (getPatientEncounter().getCurrentPatientRoom() != null
-                && getPatientEncounter().getCurrentPatientRoom().getDischargedAt() == null) {
-            JsfUtil.addErrorMessage("Cannot discharge patient: the current room has not been discharged. "
-                    + "Please discharge the room first to record an accurate billing end time.");
-            return;
+        if (getPatientEncounter().getAdmissionType() != null
+                && getPatientEncounter().getAdmissionType().isRoomChargesAllowed()) {
+            if (getPatientEncounter().getCurrentPatientRoom() != null && getPatientEncounter().getCurrentPatientRoom().getDischargedAt() == null) {
+                JsfUtil.addErrorMessage("Cannot discharge patient: the current room has not been discharged. " + "Please discharge the room first to record an accurate billing end time.");
+                return;
+            }
         }
 
         getPatientEncounter().setDateOfDischarge(date);
@@ -1773,13 +1777,12 @@ public class BhtSummeryController implements Serializable {
             tot2 += cit.getAdjustedTotal();
         }
 
-        //   System.err.println("Total " + tot);
-        //    System.err.println("Total 2 " + tot2);
         double different = Math.abs((tot - tot2));
 
         if (different > 0.1) {
-            if (!getWebUserController().hasPrivilege("InwardSettleFinalBillUnrestricted")) {
-                JsfUtil.addErrorMessage("Please Adjust category amount correctly");
+            if (configOptionApplicationController.getBooleanValueByKey("Block Inward Final Bill When Category Adjusted Total Differs From Actual Total", true)) {
+                JsfUtil.addErrorMessage("There is a difference between actual and adjusted values.");
+                JsfUtil.addErrorMessage("Please Adjust category amount correctly.");
                 return true;
             }
         }
@@ -2628,6 +2631,20 @@ public class BhtSummeryController implements Serializable {
         this.billFeeFacade = billFeeFacade;
     }
 
+    private com.divudi.core.entity.Institution resolveSingleCreditCompany(PatientEncounter encounter) {
+        if (encounter == null) {
+            return null;
+        }
+        String jpql = "select e from EncounterCreditCompany e where e.retired = false and e.patientEncounter = :enc";
+        java.util.HashMap<String, Object> hm = new java.util.HashMap<>();
+        hm.put("enc", encounter);
+        List<EncounterCreditCompany> list = encounterCreditCompanyFacade.findByJpql(jpql, hm, 2);
+        if (list != null && list.size() == 1) {
+            return list.get(0).getInstitution();
+        }
+        return null;
+    }
+
     private List<PatientRoom> createPatientRooms() {
 
         patientRooms = getInwardBean().fetchPatientRoomAll(getPatientEncounter(), childPatientEncouters);
@@ -2643,14 +2660,16 @@ public class BhtSummeryController implements Serializable {
         PaymentScheme scheme = getPatientEncounter().getPaymentScheme();
         AdmissionType admType = getPatientEncounter().getAdmissionType();
 
+        com.divudi.core.entity.Institution creditCompany = resolveSingleCreditCompany(getPatientEncounter());
+
         // Fetch all discount percentages once per recalculation (not per room)
-        double roomPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.RoomCharges);
-        double maintainPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.MaintainCharges);
-        double linenPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.LinenCharges);
-        double nursingPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.NursingCharges);
-        double moPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.MOCharges);
-        double adminPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.AdministrationCharge);
-        double medicalCarePct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.MedicalCareICU);
+        double roomPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.RoomCharges, creditCompany);
+        double maintainPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.MaintainCharges, creditCompany);
+        double linenPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.LinenCharges, creditCompany);
+        double nursingPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.NursingCharges, creditCompany);
+        double moPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.MOCharges, creditCompany);
+        double adminPct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.AdministrationCharge, creditCompany);
+        double medicalCarePct = getPriceMatrixController().getInwardDiscountPercentForChargeType(pm, scheme, admType, InwardChargeType.MedicalCareICU, creditCompany);
 
         for (PatientRoom p : patientRooms) {
             if (p.getAdmittedAt() == null) {
@@ -3041,12 +3060,12 @@ public class BhtSummeryController implements Serializable {
         if (getPatientEncounter() != null && getPatientEncounter().getPaymentMethod() == PaymentMethod.Credit) {
             populateCreditCompanyAllocations();
         }
-        
+
         //Update Last Processing Details
         persistLastProcessingSnapshot();
-        
+
     }
-    
+
     private void persistLastProcessingSnapshot() {
         patientEncounter.setLastProcessBy(sessionController.getLoggedUser());
         patientEncounter.setLastProcessAt(new Date());
@@ -3056,7 +3075,7 @@ public class BhtSummeryController implements Serializable {
         patientEncounter.setDiscountAvailableAtFinalProcessing(discount);
         patientEncounter.setAmountDueAtFinalProcessing(due);
         patientEncounterFacade.edit(patientEncounter);
-        System.out.println("Update Last Processing Details of " + patientEncounter.getBhtNo()); 
+        System.out.println("Update Last Processing Details of " + patientEncounter.getBhtNo());
     }
 
     public void changeIsMade() {
@@ -3181,37 +3200,37 @@ public class BhtSummeryController implements Serializable {
                     case Etu:
                         ChargeItemTotal etuDrugTotal = new ChargeItemTotal();
                         etuDrugTotal.setInwardChargeType(InwardChargeType.Etu_Medicine);
-                        etuDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters,DepartmentType.Etu));
+                        etuDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters, DepartmentType.Etu));
                         chargeItemTotals.add(etuDrugTotal);
                         break;
                     case Pharmacy:
                         ChargeItemTotal pharmacyDrugTotal = new ChargeItemTotal();
                         pharmacyDrugTotal.setInwardChargeType(InwardChargeType.Pharmacy_Medicine);
-                        pharmacyDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters,DepartmentType.Pharmacy));
+                        pharmacyDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters, DepartmentType.Pharmacy));
                         chargeItemTotals.add(pharmacyDrugTotal);
                         break;
                     case Inward:
                         ChargeItemTotal inwardDrugTotal = new ChargeItemTotal();
                         inwardDrugTotal.setInwardChargeType(InwardChargeType.Inward_Medicine);
-                        inwardDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters,DepartmentType.Inward));
+                        inwardDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters, DepartmentType.Inward));
                         chargeItemTotals.add(inwardDrugTotal);
                         break;
                     case Theatre:
                         ChargeItemTotal theatreDrugTotal = new ChargeItemTotal();
                         theatreDrugTotal.setInwardChargeType(InwardChargeType.Theatre_Medicine);
-                        theatreDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters,DepartmentType.Theatre));
+                        theatreDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters, DepartmentType.Theatre));
                         chargeItemTotals.add(theatreDrugTotal);
                         break;
                     case Store:
                         ChargeItemTotal storeDrugTotal = new ChargeItemTotal();
                         storeDrugTotal.setInwardChargeType(InwardChargeType.Store_Medicine);
-                        storeDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters,DepartmentType.Store));
+                        storeDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters, DepartmentType.Store));
                         chargeItemTotals.add(storeDrugTotal);
                         break;
                     case Inventry:
                         ChargeItemTotal inventryDrugTotal = new ChargeItemTotal();
                         inventryDrugTotal.setInwardChargeType(InwardChargeType.Etu_Medicine);
-                        inventryDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters,DepartmentType.Inventry));
+                        inventryDrugTotal.setTotal(getInwardBean().calCostOfIssueByBill(getPatientEncounter(), btas, childPatientEncouters, DepartmentType.Inventry));
                         chargeItemTotals.add(inventryDrugTotal);
                         break;
                     default:

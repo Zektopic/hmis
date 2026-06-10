@@ -506,6 +506,8 @@ public enum Privileges {
     PharmacyIssueForRequestSave("Pharmacy Issue For Request Save"),
     PharmacyIssueForRequestFinalize("Pharmacy Issue For Request Finalize"),
     PharmacyIssueForRequestApprove("Pharmacy Issue For Request Approve"),
+    PharmacyReceiveFinalize("Pharmacy Receive Finalize"),
+    PharmacyReceiveApprove("Pharmacy Receive Approve"),
     // Pharmacy Inpatient medication management
     InpatientMedicationManagementMenue("Inpatient Medication Management Menu"),
     PharmacyDirectIssueToBht("Pharmacy Direct Issue to BHT"),
@@ -546,6 +548,8 @@ public enum Privileges {
     // Pharmacy Disposal
     PharmacyDisposalMenue("Pharmacy Disposal Menu"),
     PharmacyDisposalIssue("Pharmacy Disposal Issue"),
+    PharmacyDisposalIssueFinalize("Pharmacy Disposal Issue Finalize"),
+    PharmacyDisposalIssueApprove("Pharmacy Disposal Issue Approve"),
     PharmacyDisposalSearchIssueBill("Pharmacy Disposal Search Issue Bill"),
     PharmacyDisposalSearchIssueBillItems("Pharmacy Disposal Search Issue Bill Items"),
     PharmacyDisposalSearchIssueReturnBill("Pharmacy Disposal Search Issue Return Bill"),
@@ -943,6 +947,8 @@ public enum Privileges {
             case PharmacyIssueForRequestSave:
             case PharmacyIssueForRequestFinalize:
             case PharmacyIssueForRequestApprove:
+            case PharmacyReceiveFinalize:
+            case PharmacyReceiveApprove:
 
             // Retail Transactions
             case PharmacyRetailTransaction:
@@ -973,6 +979,8 @@ public enum Privileges {
 
             // Disposal
             case PharmacyDisposalIssue:
+            case PharmacyDisposalIssueFinalize:
+            case PharmacyDisposalIssueApprove:
             case PharmacyDisposalSearchIssueBill:
             case PharmacyDisposalSearchIssueBillItems:
             case PharmacyDisposalSearchIssueReturnBill:

@@ -1139,26 +1139,12 @@
                         value="Procurement"
                         rendered="#{webUserController.hasPrivilege('PharmacyProcurementMenu')}"
                         icon="fas fa-shopping-cart" />
-                    <p:submenu label="Disposal" icon="fas fa-trash-alt" rendered="#{webUserController.hasPrivilege('PharmacyDisposalMenue')}">
-                        <p:menuitem
-                            ajax="false"
-                            action="/pharmacy/pharmacy_issue?faces-redirect=true"
-                            value="Issue" icon="fas fa-trash"
-                            actionListener="#{pharmacyIssueController.resetAll()}"
-                            rendered="#{webUserController.hasPrivilege('PharmacyDisposalIssue')}" ></p:menuitem>
-                        <p:menuitem
-                            ajax="false"
-                            action="/pharmacy/pharmacy_search_issue_bill?faces-redirect=true"
-                            actionListener="#{searchController.makeListNull}"
-                            value="Search Issue Bill" icon="fas fa-search"
-                            rendered="#{webUserController.hasPrivilege('PharmacyDisposalSearchIssueBill')}" ></p:menuitem>
-                        <p:menuitem  ajax="false" action="/pharmacy/pharmacy_search_issue_bill_item?faces-redirect=true" actionListener="#{searchController.makeListNull}"
-                                     value="Search Issue Bill Items" icon="fas fa-list" rendered="#{webUserController.hasPrivilege('PharmacyDisposalSearchIssueBillItems')}" ></p:menuitem>
-                        <p:menuitem  ajax="false" action="/pharmacy/pharmacy_search_issue_bill_return?faces-redirect=true" actionListener="#{searchController.makeListNull}"
-                                     value="Search Issue Return Bill" icon="fas fa-undo" rendered="#{webUserController.hasPrivilege('PharmacyDisposalSearchIssueReturnBill')}" ></p:menuitem>
-                        <p:menuitem  ajax="false" action="/store/issue_rate_margin_manager?faces-redirect=true"
-                                     value="Unit Issue Margin" icon="fas fa-percentage" rendered="#{webUserController.hasPrivilege('PharmacyDisposalUnitIssueMargin')}" />
-                    </p:submenu>
+                    <p:menuitem
+                        ajax="false"
+                        action="/pharmacy/disposal_index?faces-redirect=true"
+                        value="Disposal"
+                        rendered="#{webUserController.hasPrivilege('PharmacyDisposalMenue')}"
+                        icon="fas fa-trash-alt" />
 
                     <p:menuitem
                         ajax="false"
@@ -2033,30 +2019,31 @@
                                              ajax="false"
                                              action="#{financialTransactionController.refreshCashNetTotalForMenu()}" />
                         </h:panelGroup>
-                        <!-- User Notifications UI disabled: caused TransactionRolledback errors during render.
-                             Once the JPQL/transaction issues are fixed, remove the comment markers below
-                             to re-enable the bell badge, polling, and refresh actions. -->
-                        <!--
+                        <f:websocket channel="notifications"
+                                     user="#{sessionController.loggedUser.id}"
+                                     onmessage="onNotificationPush"
+                                     connected="#{sessionController.loggedUser != null}" />
+                        <p:remoteCommand name="refreshNotifications"
+                                         update="notCount notificationGrowl"
+                                         action="#{userNotificationController.onPushRefreshNotifications}" />
+                        <p:growl id="notificationGrowl" life="6000" showDetail="true" />
+                        <script type="text/javascript">
+                            function onNotificationPush(message) {
+                                refreshNotifications();
+                            }
+                        </script>
                         <div class="mx-4">
-                            <h:panelGroup>
-                                <p:poll
-                                    rendered="#{configOptionApplicationController.getBooleanValueByKey('Auto-refresh Menu Notifications', false)}"
-                                    interval="#{configOptionApplicationController.getLongValueByKey('Auto-refresh Menu Notification Duration', 1800)}"
-                                    listener="#{userNotificationController.fillLoggedUserNotifications()}"
-                                    update="notCount" />
-                                <h:panelGroup id="notCount">
-                                    <p:badge id="bdgeNotiCount" severity="danger" value="#{webUserController.userNotificationCount}">
-                                        <p:commandButton id="btnNot" ajax="false" icon="pi pi-bell" action="#{userNotificationController.navigateToRecivedNotification()}" />
-                                    </p:badge>
-                                </h:panelGroup>
-                                <p:commandButton 
-                                    icon="pi pi-refresh" 
-                                    rendered="#{not configOptionApplicationController.getBooleanValueByKey('Auto-refresh Menu Notifications', false)}"
-                                    action="#{userNotificationController.fillLoggedUserNotifications()}"
-                                    title="Refresh Notifications" style="margin-left: 10px;"/>
+                            <h:panelGroup id="notCount">
+                                <p:badge id="bdgeNotiCount"
+                                         severity="danger"
+                                         value="#{userNotificationController.items != null ? userNotificationController.items.size() : 0}">
+                                    <p:commandButton id="btnNot"
+                                                     ajax="false"
+                                                     icon="pi pi-bell"
+                                                     action="#{userNotificationController.navigateToRecivedNotification()}" />
+                                </p:badge>
                             </h:panelGroup>
                         </div>
-                        -->
 
 
                         <p:commandButton id="btnLogout" ajax="false" icon="pi pi-sign-out" action="#{sessionController.logout}" />
