@@ -2157,6 +2157,12 @@ public class PharmacyBillSearch implements Serializable {
     }
 
     private void pharmacyCancelIssuedItems(CancelledBill can) {
+        List<BillItem> newBillItems = new ArrayList<>();
+        List<BillItem> editBillItems = new ArrayList<>();
+        List<PharmaceuticalBillItem> newPhItems = new ArrayList<>();
+        List<PharmaceuticalBillItem> editPhItems = new ArrayList<>();
+
+        // First pass: instantiate, copy values and assign relationships without DB flushes
         for (BillItem nB : getBill().getBillItems()) {
             BillItem b = new BillItem();
             b.setBill(can);
@@ -2173,32 +2179,44 @@ public class PharmacyBillSearch implements Serializable {
             ph.invertValue(nB.getPharmaceuticalBillItem());
 
             b.setPharmaceuticalBillItem(ph);
-
-            if (b.getId() == null) {
-                getBillItemFacede().create(b);
-            } else {
-                getBillItemFacede().edit(b);
-            }
-
             ph.setBillItem(b);
-            getPharmaceuticalBillItemFacade().edit(ph);
 
-            //    updateRemainingQty(nB);
-            //  b.setPharmaceuticalBillItem(b.getReferanceBillItem().getPharmaceuticalBillItem());
+            newBillItems.add(b);
+            newPhItems.add(ph);
+
+            can.getBillItems().add(b);
+        }
+
+        // Batch create the initial transient entities. This generates IDs efficiently.
+        if (!newPhItems.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchCreate(newPhItems);
+        }
+        if (!newBillItems.isEmpty()) {
+            getBillItemFacede().batchCreate(newBillItems);
+        }
+
+        // Second pass: perform business logic stock updates that depend on managed entities
+        for (BillItem b : newBillItems) {
+            PharmaceuticalBillItem ph = b.getPharmaceuticalBillItem();
             double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
-            //System.err.println("Updating QTY " + qty);
             boolean returnFlag = getPharmacyBean().deductFromStockWithoutHistory(ph.getStaffStock(), Math.abs(qty), ph, getSessionController().getDepartment());
 
             if (returnFlag) {
                 getPharmacyBean().addToStock(ph.getStock(), Math.abs(qty), ph, getSessionController().getDepartment());
             } else {
                 b.setTmpQty(0);
-                getPharmaceuticalBillItemFacade().edit(b.getPharmaceuticalBillItem());
+                editPhItems.add(b.getPharmaceuticalBillItem());
             }
 
-            getBillItemFacede().edit(b);
+            editBillItems.add(b);
+        }
 
-            can.getBillItems().add(b);
+        // Final batch edits for any updates needed during the business logic pass
+        if (!editPhItems.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchEdit(editPhItems);
+        }
+        if (!editBillItems.isEmpty()) {
+            getBillItemFacede().batchEdit(editBillItems);
         }
 
         getBillFacade().edit(can);
