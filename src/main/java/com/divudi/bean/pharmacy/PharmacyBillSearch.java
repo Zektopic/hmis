@@ -1927,6 +1927,9 @@ public class PharmacyBillSearch implements Serializable {
 //
 //    }
     private void pharmacyCancelBillItemsAddStock(CancelledBill can) {
+        List<PharmaceuticalBillItem> phsToBatch = new ArrayList<>();
+        List<BillItem> bsToBatch = new ArrayList<>();
+
         for (BillItem nB : getBill().getBillItems()) {
             BillItem b = new BillItem();
             b.setBill(can);
@@ -1947,35 +1950,57 @@ public class PharmacyBillSearch implements Serializable {
             ph.invertValue(nB.getPharmaceuticalBillItem());
 
             if (ph.getId() == null) {
-                getPharmaceuticalBillItemFacade().create(ph);
+                getPharmaceuticalBillItemFacade().createAndFlush(ph);
             }
 
             b.setPharmaceuticalBillItem(ph);
 
             if (b.getId() == null) {
-                getBillItemFacede().create(b);
+                getBillItemFacede().createAndFlush(b);
             }
 
             ph.setBillItem(b);
-            getPharmaceuticalBillItemFacade().edit(ph);
 
-            //    updateRemainingQty(nB);
-            //  b.setPharmaceuticalBillItem(b.getReferanceBillItem().getPharmaceuticalBillItem());
             double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
-            //System.err.println("Updating QTY " + qty);
             getPharmacyBean().addToStock(ph.getStock(),
                     Math.abs(qty),
                     ph, getSessionController().getDepartment());
 
-            getBillItemFacede().edit(b);
-
+            phsToBatch.add(ph);
+            bsToBatch.add(b);
             can.getBillItems().add(b);
         }
+
+        getPharmaceuticalBillItemFacade().batchEdit(phsToBatch);
+        getBillItemFacede().batchEdit(bsToBatch);
 
         getBillFacade().edit(can);
     }
 
     private void pharmacyCancelBillItemsAddStock(CancelledBill can, Payment p) {
+        List<Long> billItemIds = new ArrayList<>();
+        for (BillItem nB : getBill().getBillItems()) {
+            if (nB.getId() != null) {
+                billItemIds.add(nB.getId());
+            }
+        }
+
+        Map<Long, List<BillFee>> billFeesMap = new HashMap<>();
+        if (!billItemIds.isEmpty()) {
+            String sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id IN :ids";
+            Map<String, Object> m = new HashMap<>();
+            m.put("ids", billItemIds);
+            List<BillFee> allBillFees = getBillFeeFacade().findByJpql(sql, m);
+            for (BillFee bf : allBillFees) {
+                if (bf.getBillItem() != null && bf.getBillItem().getId() != null) {
+                    billFeesMap.computeIfAbsent(bf.getBillItem().getId(), k -> new ArrayList<>()).add(bf);
+                }
+            }
+        }
+
+        List<PharmaceuticalBillItem> phsToBatch = new ArrayList<>();
+        List<BillItem> bsToBatch = new ArrayList<>();
+
         for (BillItem nB : getBill().getBillItems()) {
             BillItem b = new BillItem();
             b.setBill(can);
@@ -1996,40 +2021,32 @@ public class PharmacyBillSearch implements Serializable {
             ph.invertValue(nB.getPharmaceuticalBillItem());
 
             if (ph.getId() == null) {
-                getPharmaceuticalBillItemFacade().create(ph);
+                getPharmaceuticalBillItemFacade().createAndFlush(ph);
             }
 
             b.setPharmaceuticalBillItem(ph);
 
             if (b.getId() == null) {
-                getBillItemFacede().create(b);
+                getBillItemFacede().createAndFlush(b);
             }
 
             ph.setBillItem(b);
-            getPharmaceuticalBillItemFacade().edit(ph);
 
-            //    updateRemainingQty(nB);
-            //  b.setPharmaceuticalBillItem(b.getReferanceBillItem().getPharmaceuticalBillItem());
             double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
-            //System.err.println("Updating QTY " + qty);
             getPharmacyBean().addToStock(ph.getStock(),
                     Math.abs(qty),
                     ph, getSessionController().getDepartment());
 
-            getBillItemFacede().edit(b);
-            //get billfees from using cancel billItem
-            String sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id=" + nB.getId();
-            List<BillFee> tmp = getBillFeeFacade().findByJpql(sql);
+            List<BillFee> tmp = billFeesMap.getOrDefault(nB.getId(), new ArrayList<>());
             cancelBillFee(can, b, tmp);
 
-            //create BillFeePayments For cancel
-            sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id=" + b.getId();
-            List<BillFee> tmpC = getBillFeeFacade().findByJpql(sql);
-//            calculateBillfeePaymentsForCancelRefundBill(tmpC, p);
-            //
-
+            phsToBatch.add(ph);
+            bsToBatch.add(b);
             can.getBillItems().add(b);
         }
+
+        getPharmaceuticalBillItemFacade().batchEdit(phsToBatch);
+        getBillItemFacede().batchEdit(bsToBatch);
 
         getBillFacade().edit(can);
     }
