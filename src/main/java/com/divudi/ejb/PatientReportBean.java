@@ -409,6 +409,7 @@ public class PatientReportBean {
         //Add Antibiotics
         List<Antibiotic> abs = getAntibioticFacade().findByJpql("select a from Antibiotic a where a.retired=false order by a.name");
 
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
         for (Antibiotic a : abs) {
             InvestigationItem ii = investigationItemForAntibiotic(a, ptReport.getPatientInvestigation().getInvestigation());
             PatientReportItemValue val;
@@ -428,10 +429,13 @@ public class PatientReportBean {
                 val.setPatientReport(ptReport);
 
                 //Added by Safrin
-                getPtRivFacade().create(val);
+                toCreate.add(val);
                 ptReport.getPatientReportItemValues().add(val);
             }
 
+        }
+        if (!toCreate.isEmpty()) {
+            getPtRivFacade().batchCreate(toCreate);
         }
         //System.err.println("items :" + ptReport.getPatientReportItemValues());
 
