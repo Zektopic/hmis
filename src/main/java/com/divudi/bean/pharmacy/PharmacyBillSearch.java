@@ -2316,20 +2316,12 @@ public class PharmacyBillSearch implements Serializable {
             ph.copy(nB.getPharmaceuticalBillItem());
             ph.invertValue(nB.getPharmaceuticalBillItem());
 
-            if (ph.getId() == null) {
-                getPharmaceuticalBillItemFacade().create(ph);
-            }
-
             b.setPharmaceuticalBillItem(ph);
-
-            if (b.getId() == null) {
-                getBillItemFacede().edit(b);
-            }
-
             ph.setBillItem(b);
-            getPharmaceuticalBillItemFacade().edit(ph);
 
-            getBillItemFacede().edit(b);
+            // Create both entities together by persisting the parent.
+            // CascadeType.ALL on BillItem.pharmaceuticalBillItem will ensure 'ph' is also saved.
+            getBillItemFacede().create(b);
 
             can.getBillItems().add(b);
         }
