@@ -1073,6 +1073,8 @@ public class LimsMiddlewareController {
             for (PatientReport rtpr : prs) {
                 boolean valueToSave = false;
                 // // System.out.println("Patient Report = " + rtpr);
+                List<PatientReportItemValue> createBatch = new ArrayList<>();
+                List<PatientReportItemValue> editBatch = new ArrayList<>();
                 for (PatientReportItemValue priv : rtpr.getPatientReportItemValues()) {
                     if (priv.getInvestigationItem() != null && priv.getInvestigationItem().getTest() != null
                             && priv.getInvestigationItem().getIxItemType() == InvestigationItemType.ReportImage) {
@@ -1104,9 +1106,9 @@ public class LimsMiddlewareController {
                                     priv.setFileName(fileName);
 
                                     if (priv.getId() == null) {
-                                        patientReportItemValueFacade.create(priv);
+                                        createBatch.add(priv);
                                     } else {
-                                        patientReportItemValueFacade.edit(priv);
+                                        editBatch.add(priv);
                                     }
                                     temFlag = true;
                                     valueToSave = true;
@@ -1152,10 +1154,10 @@ public class LimsMiddlewareController {
                                     // // System.out.println("0 priv.getDoubleValue() = " + priv.getDoubleValue());
                                     if (priv.getId() == null) {
                                         // // System.out.println("0 new priv created = " + dbl);
-                                        patientReportItemValueFacade.create(priv);
+                                        createBatch.add(priv);
                                     } else {
                                         // // System.out.println("0 new priv Updates = " + dbl);
-                                        patientReportItemValueFacade.edit(priv);
+                                        editBatch.add(priv);
                                     }
                                     temFlag = true;
                                     valueToSave = true;
@@ -1178,11 +1180,11 @@ public class LimsMiddlewareController {
                                     // // System.out.println("priv double value " + priv.getDoubleValue());
                                     // // System.out.println("priv Str value = " + priv.getStrValue());
                                     if (priv.getId() == null) {
-                                        patientReportItemValueFacade.create(priv);
+                                        createBatch.add(priv);
                                         // // System.out.println("1 new priv created = " + dbl);
                                     } else {
                                         // // System.out.println("1 new priv Updates = " + dbl);
-                                        patientReportItemValueFacade.edit(priv);
+                                        editBatch.add(priv);
                                     }
                                     valueToSave = true;
                                     temFlag = true;
@@ -1200,10 +1202,10 @@ public class LimsMiddlewareController {
                                     // // System.out.println("2 priv.getDoubleValue() = " + priv.getDoubleValue());
                                     if (priv.getId() == null) {
                                         // // System.out.println("2 new priv created = " + dbl);
-                                        patientReportItemValueFacade.create(priv);
+                                        createBatch.add(priv);
                                     } else {
                                         // // System.out.println("2 new priv Updates = " + dbl);
-                                        patientReportItemValueFacade.edit(priv);
+                                        editBatch.add(priv);
                                     }
                                     temFlag = true;
                                     valueToSave = true;
@@ -1217,6 +1219,12 @@ public class LimsMiddlewareController {
                         }
                     }
 
+                }
+                if (!createBatch.isEmpty()) {
+                    patientReportItemValueFacade.batchCreate(createBatch);
+                }
+                if (!editBatch.isEmpty()) {
+                    patientReportItemValueFacade.batchEdit(editBatch);
                 }
                 if (valueToSave) {
                     rtpr.setDataEntered(true);
@@ -1308,6 +1316,8 @@ public class LimsMiddlewareController {
             for (PatientReport rtpr : prs) {
                 boolean valueToSave = false;
                 // // System.out.println("Patient Report = " + rtpr);
+                List<PatientReportItemValue> createBatch = new ArrayList<>();
+                List<PatientReportItemValue> editBatch = new ArrayList<>();
                 for (PatientReportItemValue priv : rtpr.getPatientReportItemValues()) {
                     // // System.out.println("Patient Report Item Value = " + priv);
                     if (priv.getInvestigationItem() != null && priv.getInvestigationItem().getTest() != null
@@ -1338,11 +1348,11 @@ public class LimsMiddlewareController {
                                 // // System.out.println("priv double value " + priv.getDoubleValue());
                                 // // System.out.println("priv Str value = " + priv.getStrValue());
                                 if (priv.getId() == null) {
-                                    patientReportItemValueFacade.create(priv);
+                                    createBatch.add(priv);
                                     // // System.out.println("1 new priv created = " + dbl);
                                 } else {
                                     // // System.out.println("1 new priv Updates = " + dbl);
-                                    patientReportItemValueFacade.edit(priv);
+                                    editBatch.add(priv);
                                 }
                                 valueToSave = true;
                                 temFlag = true;
@@ -1360,10 +1370,10 @@ public class LimsMiddlewareController {
                                 // // System.out.println("2 priv.getDoubleValue() = " + priv.getDoubleValue());
                                 if (priv.getId() == null) {
                                     // // System.out.println("2 new priv created = " + dbl);
-                                    patientReportItemValueFacade.create(priv);
+                                    createBatch.add(priv);
                                 } else {
                                     // // System.out.println("2 new priv Updates = " + dbl);
-                                    patientReportItemValueFacade.edit(priv);
+                                    editBatch.add(priv);
                                 }
                                 temFlag = true;
                                 valueToSave = true;
@@ -1374,6 +1384,12 @@ public class LimsMiddlewareController {
                         }
                     }
 
+                }
+                if (!createBatch.isEmpty()) {
+                    patientReportItemValueFacade.batchCreate(createBatch);
+                }
+                if (!editBatch.isEmpty()) {
+                    patientReportItemValueFacade.batchEdit(editBatch);
                 }
                 if (valueToSave) {
                     rtpr.setDataEntered(true);
