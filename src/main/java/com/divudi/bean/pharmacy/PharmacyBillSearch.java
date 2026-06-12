@@ -2368,6 +2368,7 @@ public class PharmacyBillSearch implements Serializable {
     }
 
     private void pharmacyCancelBillItems(CancelledBill newlyCreatedCancellingBill, List<Payment> ps) {
+        List<BillItem> billItemsToCreate = new ArrayList<>();
         for (BillItem originalBillItem : getBill().getBillItems()) {
             BillItem newlyCreatedReturningItem = new BillItem();
             newlyCreatedReturningItem.copy(originalBillItem);
@@ -2403,7 +2404,7 @@ public class PharmacyBillSearch implements Serializable {
             newlyCreatedReturningItem.setPharmaceuticalBillItem(newlyCreatedReturningPharmaceuticalBillItem);
             newlyCreatedReturningPharmaceuticalBillItem.setBillItem(newlyCreatedReturningItem);
 
-            getBillItemFacede().create(newlyCreatedReturningItem);
+            billItemsToCreate.add(newlyCreatedReturningItem);
 
             //get billfees from using cancel billItem  >> This feature of BillFee for Bill Items is NOT used in pharmacy related transactions
 //            String sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id=" + originalBillItem.getId();
@@ -2416,6 +2417,10 @@ public class PharmacyBillSearch implements Serializable {
             //
             newlyCreatedCancellingBill.getBillItems().add(newlyCreatedReturningItem);
 
+        }
+
+        if (!billItemsToCreate.isEmpty()) {
+            getBillItemFacede().batchCreate(billItemsToCreate);
         }
 
         getBillFacade().edit(newlyCreatedCancellingBill);
