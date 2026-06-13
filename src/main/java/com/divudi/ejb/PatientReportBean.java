@@ -158,6 +158,7 @@ public class PatientReportBean {
     public void addPatientReportItemValuesForReport(PatientReport ptReport) {
         String jpql = "";
         Investigation temIx = (Investigation) ptReport.getItem();
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
 
         for (ReportItem ii : temIx.getReportItems()) {
 
@@ -251,10 +252,14 @@ public class PatientReportBean {
             if (val != null) {
                 if(val.getId() == null){
                     val.setAllowToExportChart(ii.isAllowToExportChart());
-                    getPtRivFacade().create(val);
+                    toCreate.add(val);
                     ptReport.getPatientReportItemValues().add(val);
                 }
             }
+        }
+
+        if (!toCreate.isEmpty()) {
+            getPtRivFacade().batchCreate(toCreate);
         }
     }
     
@@ -262,6 +267,7 @@ public class PatientReportBean {
          System.out.println("addPatientReportItemValuesForTemplateReport");
         String sql = "";
         Investigation temIx = (Investigation) ptReport.getItem();
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
         for (ReportItem ii : temIx.getReportItems()) {
             System.out.println("ii = " + ii);
             System.out.println("ii.getName = " + ii.getName());
@@ -355,32 +361,23 @@ public class PatientReportBean {
 
             if (val != null) {
 
-                getPtRivFacade().create(val);
+                toCreate.add(val);
 
                 ptReport.getPatientReportItemValues().add(val);
             }
+        }
+
+        if (!toCreate.isEmpty()) {
+            getPtRivFacade().batchCreate(toCreate);
         }
     }
 
     public void addMicrobiologyReportItemValuesForReport(PatientReport ptReport) {
         String sql = "";
-        List<PatientReportItemValue> newVals = new ArrayList<>();
 //        ////// // System.out.println("going to add microbiology report item values for report");
         Investigation temIx = (Investigation) ptReport.getItem();
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
 //        ////// // System.out.println("Items getting for ix is - " + temIx.getName());
-        HashMap<Long, PatientReportItemValue> existingValues = new HashMap<>();
-        if (ptReport != null && ptReport.getId() != null) {
-            String existingSql = "select i from PatientReportItemValue i where i.patientReport=:ptRp";
-            HashMap<String, Object> hm = new HashMap<>();
-            hm.put("ptRp", ptReport);
-            List<PatientReportItemValue> existingList = getPtRivFacade().findByJpql(existingSql, hm);
-            for (PatientReportItemValue v : existingList) {
-                if (v.getInvestigationItem() != null && v.getInvestigationItem().getId() != null) {
-                    existingValues.put(v.getInvestigationItem().getId(), v);
-                }
-            }
-        }
-
         for (ReportItem ii : temIx.getReportItems()) {
 //            ////// // System.out.println("report items is " + ii.getName());
             if (ii.isRetired()) {
@@ -391,7 +388,14 @@ public class PatientReportBean {
             if ((ii.getIxItemType() == InvestigationItemType.Value || ii.getIxItemType() == InvestigationItemType.DynamicLabel)) {
                 if (ii.getIxItemValueType() == InvestigationItemValueType.Memo) {
 //                    System.err.println("1");
-                    val = existingValues.get(ii.getId());
+                    sql = "select i from PatientReportItemValue i where i.patientReport=:ptRp"
+                            + " and i.investigationItem=:inv ";
+                    HashMap hm = new HashMap();
+//                    ReportItem r = new ReportItem();
+//                    r.isRetired()
+                    hm.put("ptRp", ptReport);
+                    hm.put("inv", ii);
+                    val = getPtRivFacade().findFirstByJpql(sql, hm);
 //                    ////// // System.out.println("val is " + val);
                     if (val == null) {
                         val = new PatientReportItemValue();
@@ -402,7 +406,7 @@ public class PatientReportBean {
                         val.setPatientReport(ptReport);
 
                         //added by safrin
-                        newVals.add(val);
+                        toCreate.add(val);
                         ptReport.getPatientReportItemValues().add(val);
 
 //                        ////// // System.out.println("value added to pr teport" + ptReport);
@@ -418,11 +422,14 @@ public class PatientReportBean {
 
         for (Antibiotic a : abs) {
             InvestigationItem ii = investigationItemForAntibiotic(a, ptReport.getPatientInvestigation().getInvestigation());
-            PatientReportItemValue val = null;
-            if (ii != null && ii.getId() != null) {
-                val = existingValues.get(ii.getId());
-            }
+            PatientReportItemValue val;
+            sql = "select i from PatientReportItemValue i where i.patientReport=:ptRp"
+                    + " and i.investigationItem=:inv";
+            HashMap hm = new HashMap();
+            hm.put("ptRp", ptReport);
+            hm.put("inv", ii);
 
+            val = getPtRivFacade().findFirstByJpql(sql, hm);
             if (val == null) {
                 val = new PatientReportItemValue();
                 val.setStrValue("");
@@ -432,14 +439,14 @@ public class PatientReportBean {
                 val.setPatientReport(ptReport);
 
                 //Added by Safrin
-                newVals.add(val);
+                toCreate.add(val);
                 ptReport.getPatientReportItemValues().add(val);
             }
 
         }
 
-        if (!newVals.isEmpty()) {
-            getPtRivFacade().batchCreate(newVals);
+        if (!toCreate.isEmpty()) {
+            getPtRivFacade().batchCreate(toCreate);
         }
         //System.err.println("items :" + ptReport.getPatientReportItemValues());
 
