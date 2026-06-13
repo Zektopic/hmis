@@ -669,33 +669,6 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
                 return; // link expired
             }
             bill = getBillFacade().find(decoded[0]);
-        } else {
-            // TODO: Remove this legacy block after 2026-07-09.
-            // Backward compatibility for links sent before HMAC migration (issue #19863).
-            // Old links have a 1-month TTL so none will be valid after that date.
-            if (encryptedExpiary != null) {
-                Date expiaryDate;
-                try {
-                    String ed = securityController.decrypt(encryptedExpiary);
-                    if (ed == null) {
-                        return;
-                    }
-                    expiaryDate = new SimpleDateFormat("ddMMMMyyyyhhmmss").parse(ed);
-                } catch (ParseException ex) {
-                    return;
-                }
-                if (expiaryDate.before(new Date())) {
-                    return;
-                }
-            }
-            String idStr = getSecurityController().decrypt(encryptedPatientReportId);
-            Long id = 0L;
-            try {
-                id = Long.parseLong(idStr);
-            } catch (Exception e) {
-                return;
-            }
-            bill = getBillFacade().find(id);
         }
     }
 
