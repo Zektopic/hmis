@@ -1,0 +1,239 @@
+<<<<<<< SEARCH
+    private void pharmacyCancelBillItemsAddStock(CancelledBill can) {
+        for (BillItem nB : getBill().getBillItems()) {
+            BillItem b = new BillItem();
+            b.setBill(can);
+            b.copy(nB);
+            b.invertValue(nB);
+
+            if (can.getBillType() == BillType.PharmacyGrnBill || can.getBillType() == BillType.PharmacyGrnReturn) {
+                b.setReferanceBillItem(nB.getReferanceBillItem());
+            } else {
+                b.setReferanceBillItem(nB);
+            }
+
+            b.setCreatedAt(new Date());
+            b.setCreater(getSessionController().getLoggedUser());
+
+            PharmaceuticalBillItem ph = new PharmaceuticalBillItem();
+            ph.copy(nB.getPharmaceuticalBillItem());
+            ph.invertValue(nB.getPharmaceuticalBillItem());
+
+            if (ph.getId() == null) {
+                getPharmaceuticalBillItemFacade().create(ph);
+            }
+
+            b.setPharmaceuticalBillItem(ph);
+
+            if (b.getId() == null) {
+                getBillItemFacede().create(b);
+            }
+
+            ph.setBillItem(b);
+            getPharmaceuticalBillItemFacade().edit(ph);
+
+            //    updateRemainingQty(nB);
+            //  b.setPharmaceuticalBillItem(b.getReferanceBillItem().getPharmaceuticalBillItem());
+            double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
+            //System.err.println("Updating QTY " + qty);
+            getPharmacyBean().addToStock(ph.getStock(),
+                    Math.abs(qty),
+                    ph, getSessionController().getDepartment());
+
+            getBillItemFacede().edit(b);
+
+            can.getBillItems().add(b);
+        }
+
+        getBillFacade().edit(can);
+    }
+
+    private void pharmacyCancelBillItemsAddStock(CancelledBill can, Payment p) {
+        for (BillItem nB : getBill().getBillItems()) {
+            BillItem b = new BillItem();
+            b.setBill(can);
+            b.copy(nB);
+            b.invertValue(nB);
+
+            if (can.getBillType() == BillType.PharmacyGrnBill || can.getBillType() == BillType.PharmacyGrnReturn) {
+                b.setReferanceBillItem(nB.getReferanceBillItem());
+            } else {
+                b.setReferanceBillItem(nB);
+            }
+
+            b.setCreatedAt(new Date());
+            b.setCreater(getSessionController().getLoggedUser());
+
+            PharmaceuticalBillItem ph = new PharmaceuticalBillItem();
+            ph.copy(nB.getPharmaceuticalBillItem());
+            ph.invertValue(nB.getPharmaceuticalBillItem());
+
+            if (ph.getId() == null) {
+                getPharmaceuticalBillItemFacade().create(ph);
+            }
+
+            b.setPharmaceuticalBillItem(ph);
+
+            if (b.getId() == null) {
+                getBillItemFacede().create(b);
+            }
+
+            ph.setBillItem(b);
+            getPharmaceuticalBillItemFacade().edit(ph);
+
+            //    updateRemainingQty(nB);
+            //  b.setPharmaceuticalBillItem(b.getReferanceBillItem().getPharmaceuticalBillItem());
+            double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
+            //System.err.println("Updating QTY " + qty);
+            getPharmacyBean().addToStock(ph.getStock(),
+                    Math.abs(qty),
+                    ph, getSessionController().getDepartment());
+
+            getBillItemFacede().edit(b);
+            //get billfees from using cancel billItem
+            String sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id=" + nB.getId();
+            List<BillFee> tmp = getBillFeeFacade().findByJpql(sql);
+            cancelBillFee(can, b, tmp);
+
+            //create BillFeePayments For cancel
+            sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id=" + b.getId();
+            List<BillFee> tmpC = getBillFeeFacade().findByJpql(sql);
+//            calculateBillfeePaymentsForCancelRefundBill(tmpC, p);
+            //
+
+            can.getBillItems().add(b);
+        }
+
+        getBillFacade().edit(can);
+    }
+=======
+    private void pharmacyCancelBillItemsAddStock(CancelledBill can) {
+        List<PharmaceuticalBillItem> phsToBatch = new ArrayList<>();
+        List<BillItem> bsToBatch = new ArrayList<>();
+
+        for (BillItem nB : getBill().getBillItems()) {
+            BillItem b = new BillItem();
+            b.setBill(can);
+            b.copy(nB);
+            b.invertValue(nB);
+
+            if (can.getBillType() == BillType.PharmacyGrnBill || can.getBillType() == BillType.PharmacyGrnReturn) {
+                b.setReferanceBillItem(nB.getReferanceBillItem());
+            } else {
+                b.setReferanceBillItem(nB);
+            }
+
+            b.setCreatedAt(new Date());
+            b.setCreater(getSessionController().getLoggedUser());
+
+            PharmaceuticalBillItem ph = new PharmaceuticalBillItem();
+            ph.copy(nB.getPharmaceuticalBillItem());
+            ph.invertValue(nB.getPharmaceuticalBillItem());
+
+            // Create entities and immediately flush to database to generate IDs
+            // This is required because getPharmacyBean().addToStock depends on persisted entities
+            if (ph.getId() == null) {
+                getPharmaceuticalBillItemFacade().createAndFlush(ph);
+            }
+
+            b.setPharmaceuticalBillItem(ph);
+
+            if (b.getId() == null) {
+                getBillItemFacede().createAndFlush(b);
+            }
+
+            ph.setBillItem(b);
+            phsToBatch.add(ph);
+
+            double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
+            getPharmacyBean().addToStock(ph.getStock(),
+                    Math.abs(qty),
+                    ph, getSessionController().getDepartment());
+
+            bsToBatch.add(b);
+            can.getBillItems().add(b);
+        }
+
+        getPharmaceuticalBillItemFacade().batchEdit(phsToBatch);
+        getBillItemFacede().batchEdit(bsToBatch);
+
+        getBillFacade().edit(can);
+    }
+
+    private void pharmacyCancelBillItemsAddStock(CancelledBill can, Payment p) {
+        List<Long> billItemIds = new ArrayList<>();
+        for (BillItem nB : getBill().getBillItems()) {
+            if (nB.getId() != null) {
+                billItemIds.add(nB.getId());
+            }
+        }
+
+        Map<Long, List<BillFee>> billFeesMap = new HashMap<>();
+        if (!billItemIds.isEmpty()) {
+            String sql = "Select bf From BillFee bf where bf.retired=false and bf.billItem.id IN :ids";
+            Map<String, Object> m = new HashMap<>();
+            m.put("ids", billItemIds);
+            List<BillFee> allBillFees = getBillFeeFacade().findByJpql(sql, m);
+            for (BillFee bf : allBillFees) {
+                if (bf.getBillItem() != null && bf.getBillItem().getId() != null) {
+                    billFeesMap.computeIfAbsent(bf.getBillItem().getId(), k -> new ArrayList<>()).add(bf);
+                }
+            }
+        }
+
+        List<PharmaceuticalBillItem> phsToBatch = new ArrayList<>();
+        List<BillItem> bsToBatch = new ArrayList<>();
+
+        for (BillItem nB : getBill().getBillItems()) {
+            BillItem b = new BillItem();
+            b.setBill(can);
+            b.copy(nB);
+            b.invertValue(nB);
+
+            if (can.getBillType() == BillType.PharmacyGrnBill || can.getBillType() == BillType.PharmacyGrnReturn) {
+                b.setReferanceBillItem(nB.getReferanceBillItem());
+            } else {
+                b.setReferanceBillItem(nB);
+            }
+
+            b.setCreatedAt(new Date());
+            b.setCreater(getSessionController().getLoggedUser());
+
+            PharmaceuticalBillItem ph = new PharmaceuticalBillItem();
+            ph.copy(nB.getPharmaceuticalBillItem());
+            ph.invertValue(nB.getPharmaceuticalBillItem());
+
+            // Create entities and immediately flush to database to generate IDs
+            // This is required because getPharmacyBean().addToStock depends on persisted entities
+            if (ph.getId() == null) {
+                getPharmaceuticalBillItemFacade().createAndFlush(ph);
+            }
+
+            b.setPharmaceuticalBillItem(ph);
+
+            if (b.getId() == null) {
+                getBillItemFacede().createAndFlush(b);
+            }
+
+            ph.setBillItem(b);
+            phsToBatch.add(ph);
+
+            double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
+            getPharmacyBean().addToStock(ph.getStock(),
+                    Math.abs(qty),
+                    ph, getSessionController().getDepartment());
+
+            bsToBatch.add(b);
+
+            List<BillFee> tmp = billFeesMap.getOrDefault(nB.getId(), new ArrayList<>());
+            cancelBillFee(can, b, tmp);
+
+            can.getBillItems().add(b);
+        }
+
+        getPharmaceuticalBillItemFacade().batchEdit(phsToBatch);
+        getBillItemFacede().batchEdit(bsToBatch);
+
+        getBillFacade().edit(can);
+    }
+>>>>>>> REPLACE
