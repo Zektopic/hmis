@@ -418,31 +418,46 @@ public class PatientReportController implements Serializable {
             return;
         }
 
-        String decodedIdStr;
-        try {
-            decodedIdStr = URLDecoder.decode(encryptedPatientReportId, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            // Handle the exception, possibly with logging
-            return;
-        }
+        if (encryptedPatientReportId.startsWith("hmac.")) {
+            String hmacKey = getSecurityController().obtainHmacSigningKey(sessionController);
+            if (hmacKey == null || hmacKey.trim().isEmpty()) {
+                return;
+            }
+            long[] decoded = getSecurityController().decodeBillToken(encryptedPatientReportId, hmacKey);
+            if (decoded == null) {
+                return;
+            }
+            if (new Date().getTime() > decoded[1]) {
+                return; // link expired
+            }
+            currentPatientReport = getFacade().find(decoded[0]);
+        } else {
+            String decodedIdStr;
+            try {
+                decodedIdStr = URLDecoder.decode(encryptedPatientReportId, "UTF-8");
+            } catch (UnsupportedEncodingException e) {
+                // Handle the exception, possibly with logging
+                return;
+            }
 
-        String idStr = getSecurityController().decrypt(decodedIdStr);
-        if (idStr == null || idStr.trim().isEmpty()) {
-            // Handle the situation where decryption returns null or an empty string
-            return;
-        }
+            String idStr = getSecurityController().decrypt(decodedIdStr);
+            if (idStr == null || idStr.trim().isEmpty()) {
+                // Handle the situation where decryption returns null or an empty string
+                return;
+            }
 
-        Long id;
-        try {
-            id = Long.parseLong(idStr);
-        } catch (NumberFormatException e) {
-            // Handle the exception, possibly with logging
-            return;
-        }
+            Long id;
+            try {
+                id = Long.parseLong(idStr);
+            } catch (NumberFormatException e) {
+                // Handle the exception, possibly with logging
+                return;
+            }
 
-        PatientReport pr = getFacade().find(id);
-        if (pr != null) {
-            currentPatientReport = pr;
+            PatientReport pr = getFacade().find(id);
+            if (pr != null) {
+                currentPatientReport = pr;
+            }
         }
     }
 
@@ -1731,7 +1746,7 @@ public class PatientReportController implements Serializable {
     public String smsBody(PatientReport r, String old) {
         Calendar c = Calendar.getInstance();
         c.add(Calendar.MONTH, 1);
-        String temId = getSecurityController().encrypt(r.getId().toString());
+        String temId = getSecurityController().createBillToken(r.getId(), c.getTime(), getSecurityController().obtainHmacSigningKey(sessionController));
         try {
             temId = URLEncoder.encode(temId, "UTF-8");
         } catch (UnsupportedEncodingException ex) {
@@ -1748,19 +1763,12 @@ public class PatientReportController implements Serializable {
     public String smsBody(PatientReport r, boolean old) {
         Calendar c = Calendar.getInstance();
         c.add(Calendar.MONTH, 1);
-        String temId = currentPatientReport.getId() + "";
-        temId = getSecurityController().encrypt(temId);
+        String temId = getSecurityController().createBillToken(r.getId(), c.getTime(), getSecurityController().obtainHmacSigningKey(sessionController));
         try {
             temId = URLEncoder.encode(temId, "UTF-8");
         } catch (UnsupportedEncodingException ex) {
         }
-        String ed = CommonFunctions.getDateFormat(c.getTime(), "ddMMMMyyyyhhmmss");
-        ed = getSecurityController().encrypt(ed);
-        try {
-            ed = URLEncoder.encode(ed, "UTF-8");
-        } catch (UnsupportedEncodingException ex) {
-        }
-        String url = CommonFunctions.getBaseUrl() + "faces/requests/report.xhtml?id=" + temId + "&user=" + ed;
+        String url = CommonFunctions.getBaseUrl() + "faces/requests/report.xhtml?id=" + temId;
         String b = "Your "
                 + r.getPatientInvestigation().getInvestigation().getName()
                 + " is ready. "
