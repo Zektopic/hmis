@@ -13,7 +13,9 @@ import com.divudi.core.entity.ServiceCategory;
 import com.divudi.core.facade.ServiceCategoryFacade;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -43,7 +45,10 @@ public class ServiceCategoryController implements Serializable {
     String selectText = "";
 
     public List<ServiceCategory> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from ServiceCategory c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String sql = "select c from ServiceCategory c where c.retired=false and upper(c.name) like :q order by c.name";
+        Map<String, Object> hm = new HashMap<>();
+        hm.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, hm);
         return selectedItems;
     }
 

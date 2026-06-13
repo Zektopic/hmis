@@ -158,6 +158,7 @@ public class PatientReportBean {
     public void addPatientReportItemValuesForReport(PatientReport ptReport) {
         String jpql = "";
         Investigation temIx = (Investigation) ptReport.getItem();
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
 
         for (ReportItem ii : temIx.getReportItems()) {
 
@@ -251,10 +252,14 @@ public class PatientReportBean {
             if (val != null) {
                 if(val.getId() == null){
                     val.setAllowToExportChart(ii.isAllowToExportChart());
-                    getPtRivFacade().create(val);
+                    toCreate.add(val);
                     ptReport.getPatientReportItemValues().add(val);
                 }
             }
+        }
+
+        if (!toCreate.isEmpty()) {
+            getPtRivFacade().batchCreate(toCreate);
         }
     }
     
@@ -262,6 +267,7 @@ public class PatientReportBean {
          System.out.println("addPatientReportItemValuesForTemplateReport");
         String sql = "";
         Investigation temIx = (Investigation) ptReport.getItem();
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
         for (ReportItem ii : temIx.getReportItems()) {
             System.out.println("ii = " + ii);
             System.out.println("ii.getName = " + ii.getName());
@@ -355,10 +361,14 @@ public class PatientReportBean {
 
             if (val != null) {
 
-                getPtRivFacade().create(val);
+                toCreate.add(val);
 
                 ptReport.getPatientReportItemValues().add(val);
             }
+        }
+
+        if (!toCreate.isEmpty()) {
+            getPtRivFacade().batchCreate(toCreate);
         }
     }
 
@@ -366,6 +376,7 @@ public class PatientReportBean {
         String sql = "";
 //        ////// // System.out.println("going to add microbiology report item values for report");
         Investigation temIx = (Investigation) ptReport.getItem();
+        List<PatientReportItemValue> toCreate = new ArrayList<>();
 //        ////// // System.out.println("Items getting for ix is - " + temIx.getName());
         for (ReportItem ii : temIx.getReportItems()) {
 //            ////// // System.out.println("report items is " + ii.getName());
@@ -395,7 +406,7 @@ public class PatientReportBean {
                         val.setPatientReport(ptReport);
 
                         //added by safrin
-                        getPtRivFacade().create(val);
+                        toCreate.add(val);
                         ptReport.getPatientReportItemValues().add(val);
 
 //                        ////// // System.out.println("value added to pr teport" + ptReport);
