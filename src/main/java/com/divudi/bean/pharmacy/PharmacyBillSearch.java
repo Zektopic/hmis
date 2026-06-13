@@ -2205,6 +2205,13 @@ public class PharmacyBillSearch implements Serializable {
     }
 
     private void pharmacyCancelReceivedItems(CancelledBill can) {
+        List<BillItem> billItemsToCreate = new ArrayList<>();
+        List<BillItem> billItemsToEdit = new ArrayList<>();
+        List<PharmaceuticalBillItem> phItemsToCreate = new ArrayList<>();
+        List<PharmaceuticalBillItem> phItemsToEdit = new ArrayList<>();
+
+        List<BillItem> newBillItems = new ArrayList<>();
+
         for (BillItem nB : getBill().getBillItems()) {
             BillItem b = new BillItem();
             b.setBill(can);
@@ -2221,7 +2228,6 @@ public class PharmacyBillSearch implements Serializable {
             }
 
             b.setReferanceBillItem(nB);
-
             b.setCreatedAt(new Date());
             b.setCreater(getSessionController().getLoggedUser());
 
@@ -2230,38 +2236,71 @@ public class PharmacyBillSearch implements Serializable {
             ph.invertValue(nB.getPharmaceuticalBillItem());
 
             b.setPharmaceuticalBillItem(ph);
+            ph.setBillItem(b);
 
             if (b.getId() == null) {
-                getBillItemFacede().create(b);
+                billItemsToCreate.add(b);
             } else {
-                getBillItemFacede().edit(b);
+                billItemsToEdit.add(b);
             }
 
-            ph.setBillItem(b);
-            getPharmaceuticalBillItemFacade().edit(ph);
+            if (ph.getId() == null) {
+                phItemsToCreate.add(ph);
+            } else {
+                phItemsToEdit.add(ph);
+            }
 
-            //    updateRemainingQty(nB);
-            //  b.setPharmaceuticalBillItem(b.getReferanceBillItem().getPharmaceuticalBillItem());
+            newBillItems.add(b);
+            can.getBillItems().add(b);
+        }
+
+        if (!billItemsToCreate.isEmpty()) {
+            getBillItemFacede().batchCreate(billItemsToCreate);
+        }
+        if (!billItemsToEdit.isEmpty()) {
+            getBillItemFacede().batchEdit(billItemsToEdit);
+        }
+
+        if (!phItemsToCreate.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchCreate(phItemsToCreate);
+        }
+        if (!phItemsToEdit.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchEdit(phItemsToEdit);
+        }
+
+        List<BillItem> billItemsToUpdateFinal = new ArrayList<>();
+        List<PharmaceuticalBillItem> phItemsToUpdateFinal = new ArrayList<>();
+
+        for (BillItem b : newBillItems) {
+            PharmaceuticalBillItem ph = b.getPharmaceuticalBillItem();
+
             double qty = ph.getFreeQtyInUnit() + ph.getQtyInUnit();
-            //System.err.println("Updating QTY " + qty);
             getPharmacyBean().addToStockWithoutHistory(ph.getStaffStock(), Math.abs(qty), ph, getSessionController().getDepartment());
 
             boolean returnFlag = getPharmacyBean().deductFromStock(ph.getStock(), Math.abs(qty), ph, getSessionController().getDepartment());
 
             if (!returnFlag) {
                 b.setTmpQty(0);
-                getPharmaceuticalBillItemFacade().edit(b.getPharmaceuticalBillItem());
+                phItemsToUpdateFinal.add(ph);
             }
+            billItemsToUpdateFinal.add(b);
+        }
 
-            getBillItemFacede().edit(b);
-
-            can.getBillItems().add(b);
+        if (!billItemsToUpdateFinal.isEmpty()) {
+            getBillItemFacede().batchEdit(billItemsToUpdateFinal);
+        }
+        if (!phItemsToUpdateFinal.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchEdit(phItemsToUpdateFinal);
         }
 
         getBillFacade().edit(can);
     }
 
     private void pharmacyCancelBillItems(CancelledBill can) {
+        List<BillItem> billItemsToEdit = new ArrayList<>();
+        List<PharmaceuticalBillItem> phItemsToCreate = new ArrayList<>();
+        List<PharmaceuticalBillItem> phItemsToEdit = new ArrayList<>();
+
         for (BillItem nB : getBill().getBillItems()) {
             BillItem b = new BillItem();
             b.setBill(can);
@@ -2281,22 +2320,29 @@ public class PharmacyBillSearch implements Serializable {
             ph.copy(nB.getPharmaceuticalBillItem());
             ph.invertValue(nB.getPharmaceuticalBillItem());
 
-            if (ph.getId() == null) {
-                getPharmaceuticalBillItemFacade().create(ph);
-            }
-
             b.setPharmaceuticalBillItem(ph);
+            ph.setBillItem(b);
 
-            if (b.getId() == null) {
-                getBillItemFacede().edit(b);
+            if (ph.getId() == null) {
+                phItemsToCreate.add(ph);
+            } else {
+                phItemsToEdit.add(ph);
             }
 
-            ph.setBillItem(b);
-            getPharmaceuticalBillItemFacade().edit(ph);
-
-            getBillItemFacede().edit(b);
+            billItemsToEdit.add(b);
 
             can.getBillItems().add(b);
+        }
+
+        if (!phItemsToCreate.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchCreate(phItemsToCreate);
+        }
+        if (!phItemsToEdit.isEmpty()) {
+            getPharmaceuticalBillItemFacade().batchEdit(phItemsToEdit);
+        }
+
+        if (!billItemsToEdit.isEmpty()) {
+            getBillItemFacede().batchEdit(billItemsToEdit);
         }
 
         getBillFacade().edit(can);
