@@ -90,8 +90,9 @@ public class StockController implements Serializable {
 
     public List<Stock> getSelectedItems() {
         Map<String, Object> m = new HashMap<>();
-        m.put("qry", "%" + getSelectText().toUpperCase() + "%");
-        selectedItems = getFacade().findByJpql("select c from Stock c where c.retired=false and upper(c.name) like :qry order by c.name", m);
+        String sql = "select c from Stock c where c.retired=false and upper(c.name) like :q order by c.name";
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, m);
         return selectedItems;
     }
 
@@ -920,8 +921,9 @@ public class StockController implements Serializable {
         List<Stock> a = null;
         if (qry != null) {
             Map<String, Object> m = new HashMap<>();
-            m.put("qry", "%" + qry.toUpperCase() + "%");
-            a = getFacade().findByJpql("select c from Stock c where c.retired=false and upper(c.name) like :qry order by c.name", m);
+            String sql = "select c from Stock c where c.retired=false and upper(c.name) like :q order by c.name";
+            m.put("q", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql(sql, m);
         }
         if (a == null) {
             a = new ArrayList<>();
