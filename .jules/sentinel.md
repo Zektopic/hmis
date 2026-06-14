@@ -12,3 +12,8 @@
 **Vulnerability:** Found JPQL injection in `ServiceCategoryController.java` where `getSelectText()` was directly concatenated into the query string for `findByJpql`.
 **Learning:** Controller classes in `com.divudi.bean.*` often use string building for `getSelectedItems()` when searching by name, exposing the system to injection vulnerabilities.
 **Prevention:** Use parameterized queries (`like :q`) and pass a `Map<String, Object>` to `getFacade().findByJpql(sql, params)` instead of string concatenation.
+
+## 2026-06-14 - JPQL Injection via String Concatenation in Controllers
+**Vulnerability:** Found JPQL injection in `RoomController.java` where `getSelectText()` was directly concatenated into the query string for `findByJpql`.
+**Learning:** Similar to the previous entry, controller classes (like `RoomController`) often use string building for `getSelectedItems()` when searching by name, exposing the system to injection vulnerabilities.
+**Prevention:** Use parameterized queries (`like :q`) and pass a `Map<String, Object>` to `getFacade().findByJpql(sql, params)` instead of string concatenation.
