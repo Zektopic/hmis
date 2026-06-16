@@ -15,6 +15,8 @@ import com.divudi.core.facade.RoomFacade;
 import java.io.Serializable;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -44,7 +46,10 @@ public class RoomController implements Serializable {
     String selectText = "";
 
     public List<Room> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Room c where c.retired=false  and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String sql = "select c from Room c where c.retired=false and upper(c.name) like :q order by c.name";
+        Map<String, Object> m = new HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, m);
         return selectedItems;
     }
 
