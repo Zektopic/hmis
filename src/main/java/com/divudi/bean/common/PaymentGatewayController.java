@@ -85,9 +85,9 @@ public class PaymentGatewayController implements Serializable {
     }
 
     public String createCheckoutSession() {
-        merchantId = configOptionApplicationController.getLongTextValueByKey("Payment Gateway Merchant ID","TESTSETHMAHOSLKR"); // Actual Merchant ID
-        apiUsername = configOptionApplicationController.getLongTextValueByKey("Payment Gateway Username", "merchant.TESTSETHMAHOSLKR"); // Actual API Username
-        apiPassword = configOptionApplicationController.getLongTextValueByKey("Payment Gateway API Password", "49de22fcd8ade9ecb3d81790f3ad152c"); // Actual API Password
+        merchantId = configOptionApplicationController.getLongTextValueByKey("Payment Gateway Merchant ID", ""); // Actual Merchant ID
+        apiUsername = configOptionApplicationController.getLongTextValueByKey("Payment Gateway Username", ""); // Actual API Username
+        apiPassword = configOptionApplicationController.getLongTextValueByKey("Payment Gateway API Password", ""); // Actual API Password
         generateTemplateForOrderDescription();
         HttpClient client = HttpClients.createDefault();
         HttpPost post = new HttpPost(gatewayUrl);
