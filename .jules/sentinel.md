@@ -24,3 +24,8 @@
 **Learning:** When using configuration fetching utilities (e.g., `getLongTextValueByKey`), developers might incorrectly pass actual production/test secrets as fallback defaults instead of empty strings, leading to those secrets being permanently embedded in the source code.
 
 **Prevention:** Ensure that fallback values for secrets in configuration retrievals are strictly empty strings (`""`) or safe dummy values, and never actual keys or passwords. Code reviews should explicitly flag any hardcoded strings that look like credentials, especially in configuration loading methods.
+
+## 2025-06-17 - Prevent JPQL Injection and Cache Pollution in ApiMembership
+**Vulnerability:** Found string concatenations in JPQL query formations (e.g. `String sql = "Select f from ItemFee f where f.retired=false and f.item.id = " + item.getId();`). While `.getId()` is generally strongly typed to return numeric objects mitigating some injection scenarios, this pattern causes statement cache pollution and is a bad security hygiene.
+**Learning:** Found over 100 occurrences of such unparameterized string concatenations.
+**Prevention:** Continuously monitor and refactor occurrences to strictly use map parameterized queries with `findByJpql(sql, params)`.
