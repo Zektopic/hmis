@@ -4,6 +4,7 @@
  */
 package com.divudi.core.facade;
 
+import com.divudi.core.entity.BillItemFinanceDetails;
 import com.divudi.core.entity.Bill;
 import com.divudi.core.entity.BillItem;
 import java.util.ArrayList;
@@ -140,4 +141,32 @@ public class BillItemFacade extends AbstractFacade<BillItem> {
         System.out.println("PERF: All PharmaBillItems created, total: " + total);
     }
 
+
+    @Override
+    public void batchEdit(List<BillItem> entities) {
+        super.batchEdit(entities);
+    }
+
+    public void prefetchFinanceDetails(List<BillItem> billItems) {
+        if (billItems == null || billItems.isEmpty()) {
+            return;
+        }
+
+        List<BillItem> persistedItems = new ArrayList<>();
+        for (BillItem bi : billItems) {
+            if (bi != null && bi.getId() != null) {
+                persistedItems.add(bi);
+            }
+        }
+
+        if (persistedItems.isEmpty()) {
+            return;
+        }
+
+        // Just fetching them into the persistence context is enough to prevent N+1 lazy loading queries.
+        String jpql = "SELECT fd FROM BillItemFinanceDetails fd WHERE fd.billItem IN :persistedItems";
+        getEntityManager().createQuery(jpql, BillItemFinanceDetails.class)
+                .setParameter("persistedItems", persistedItems)
+                .getResultList();
+    }
 }

@@ -81,4 +81,9 @@ public class PharmaceuticalBillItemFacade extends AbstractFacade<PharmaceuticalB
         return qry.getResultList();
     }
 
+
+    @Override
+    public void batchEdit(List<PharmaceuticalBillItem> entities) {
+        super.batchEdit(entities);
+    }
 }
