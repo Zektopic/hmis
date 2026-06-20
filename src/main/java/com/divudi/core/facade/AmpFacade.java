@@ -23,6 +23,12 @@ public class AmpFacade extends AbstractFacade<Amp> {
         if(em == null){}return em;
     }
 
+
+    @Override
+    public void batchEdit(java.util.List<Amp> entities) {
+        super.batchEdit(entities);
+    }
+
     public AmpFacade() {
         super(Amp.class);
     }
