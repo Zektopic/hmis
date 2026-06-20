@@ -522,11 +522,6 @@ public class Finance {
     @Path("/bill")
     @Produces("application/json")
     public String getBill(@Context HttpServletRequest requestContext) {
-//        String ipadd = requestContext.getHeader("X-FORWARDED-FOR");
-//        if (ipadd == null) {
-//            ipadd = requestContext.getRemoteAddr();
-//        }
-
         List<Bill> bills = billList(0, null, null, null);
         JSONArray array;
         JSONObject jSONObjectOut = new JSONObject();
@@ -619,11 +614,6 @@ public class Finance {
     @Path("/bill_item")
     @Produces("application/json")
     public String getBillItem(@Context HttpServletRequest requestContext) {
-//        String ipadd = requestContext.getHeader("X-FORWARDED-FOR");
-//        if (ipadd == null) {
-//            ipadd = requestContext.getRemoteAddr();
-//        }
-
         List<Bill> bills = billList(0, null, null, null);
         JSONArray array;
         JSONObject jSONObjectOut = new JSONObject();
@@ -717,11 +707,6 @@ public class Finance {
     @Produces("application/json")
     public String getBillItemByCategory(@Context HttpServletRequest requestContext,
             @PathParam("bill_category") String billCategory) {
-//        String ipadd = requestContext.getHeader("X-FORWARDED-FOR");
-//        if (ipadd == null) {
-//            ipadd = requestContext.getRemoteAddr();
-//        }
-
         JSONArray array;
         JSONObject jSONObjectOut = new JSONObject();
 
