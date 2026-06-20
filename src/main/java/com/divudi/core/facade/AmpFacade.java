@@ -23,6 +23,12 @@ public class AmpFacade extends AbstractFacade<Amp> {
         if(em == null){}return em;
     }
 
+
+    @Override
+    public void batchEdit(java.util.List<Amp> entities) {
+        super.batchEdit(entities);
+    }
+
     public AmpFacade() {
         super(Amp.class);
     }
@@ -30,11 +36,6 @@ public class AmpFacade extends AbstractFacade<Amp> {
     @Override
     public int updateByJpql(String jpql, java.util.Map<String, Object> parameters) {
         return super.updateByJpql(jpql, parameters);
-    }
-
-    @Override
-    public void batchEdit(java.util.List<Amp> entities) {
-        super.batchEdit(entities);
     }
 
 }

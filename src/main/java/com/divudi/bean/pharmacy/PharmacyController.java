@@ -1977,7 +1977,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Discount Allowed");
     }
@@ -1993,7 +1993,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Discount Not Allowed");
     }
@@ -2009,7 +2009,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Fractions Allowed");
     }
@@ -2025,7 +2025,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Fractions Not Allowed");
     }
@@ -2041,7 +2041,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Consumption Allowed");
     }
@@ -2057,7 +2057,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Consumption Not Allowed");
     }
@@ -2073,7 +2073,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Refunds Allowed");
     }
@@ -2089,7 +2089,7 @@ public class PharmacyController implements Serializable {
         }
         if (!ampsToUpdate.isEmpty()) {
             ampFacade.batchEdit(ampsToUpdate);
-        }
+        } Resolve N+1 query issue in bulk DTO updates)
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Refunds Not Allowed");
     }
