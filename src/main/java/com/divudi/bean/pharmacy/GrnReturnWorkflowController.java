@@ -907,6 +907,12 @@ public class GrnReturnWorkflowController implements Serializable {
             return;
         }
 
+        // Prefetch BillItemFinanceDetails for all billItems in a single query to prevent N+1
+        // lazy loading queries inside the loop below.
+        if (billItemFacade != null) {
+            billItemFacade.prefetchFinanceDetails(billItems);
+        }
+
         List<BillItem> itemsToRetire = new ArrayList<>();
 
         for (BillItem bi : billItems) {
@@ -936,6 +942,9 @@ public class GrnReturnWorkflowController implements Serializable {
         }
 
         // Process items that need to be retired
+        List<BillItem> biToEdit = new ArrayList<>();
+        List<PharmaceuticalBillItem> phiToEdit = new ArrayList<>();
+
         for (BillItem bi : itemsToRetire) {
             try {
                 // Mark as retired
@@ -945,7 +954,7 @@ public class GrnReturnWorkflowController implements Serializable {
 
                 // If the item already exists in database, update it
                 if (bi.getId() != null) {
-                    billItemFacade.edit(bi);
+                    biToEdit.add(bi);
 
                     // Also retire the pharmaceutical bill item
                     if (bi.getPharmaceuticalBillItem() != null && bi.getPharmaceuticalBillItem().getId() != null) {
@@ -953,7 +962,7 @@ public class GrnReturnWorkflowController implements Serializable {
                         phi.setRetired(true);
                         phi.setRetirer(sessionController.getLoggedUser());
                         phi.setRetiredAt(new Date());
-                        pharmaceuticalBillItemFacade.edit(phi);
+                        phiToEdit.add(phi);
                     }
                 }
 
@@ -963,6 +972,14 @@ public class GrnReturnWorkflowController implements Serializable {
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Error retiring zero quantity item: {0}", e.getMessage());
             }
+        }
+
+        // Execute batch updates
+        if (!biToEdit.isEmpty()) {
+            billItemFacade.batchEdit(biToEdit);
+        }
+        if (!phiToEdit.isEmpty()) {
+            pharmaceuticalBillItemFacade.batchEdit(phiToEdit);
         }
 
         // Remove retired items from the current list so they don't appear in print
