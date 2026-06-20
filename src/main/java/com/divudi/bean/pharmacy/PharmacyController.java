@@ -1938,21 +1938,41 @@ public class PharmacyController implements Serializable {
         JsfUtil.addSuccessMessage(count + " AMP(s) marked as Refunds Not Allowed");
     }
 
+    // Helper method to fetch Amps in batches to prevent N+1 query issue
+    private List<Amp> fetchAmpsInBatches(List<com.divudi.core.data.dto.AmpDto> dtos) {
+        if (dtos == null || dtos.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<Amp> allAmps = new ArrayList<>();
+        int chunkSize = 500; // Limit for IN clause
+        for (int i = 0; i < dtos.size(); i += chunkSize) {
+            int end = Math.min(i + chunkSize, dtos.size());
+            List<com.divudi.core.data.dto.AmpDto> chunk = dtos.subList(i, end);
+            List<Long> ids = chunk.stream().map(com.divudi.core.data.dto.AmpDto::getId).collect(Collectors.toList());
+            String jpql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+            java.util.Map<String, Object> map = new java.util.HashMap<>();
+            map.put("ids", ids);
+            List<Amp> fetchedAmps = ampFacade.findByJpql(jpql, map);
+            if (fetchedAmps != null) {
+                allAmps.addAll(fetchedAmps);
+            }
+        }
+        return allAmps;
+    }
+
     // DTO-based bulk update methods for improved performance
     public void bulkUpdateDiscountAllowedDto() {
         if (ampDtosSelected == null || ampDtosSelected.isEmpty()) {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setDiscountAllowed(true);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setDiscountAllowed(true);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Discount Allowed");
     }
@@ -1962,15 +1982,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setDiscountAllowed(false);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setDiscountAllowed(false);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Discount Not Allowed");
     }
@@ -1980,15 +1998,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setAllowFractions(true);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setAllowFractions(true);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Fractions Allowed");
     }
@@ -1998,15 +2014,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setAllowFractions(false);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setAllowFractions(false);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Fractions Not Allowed");
     }
@@ -2016,15 +2030,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setConsumptionAllowed(true);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setConsumptionAllowed(true);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Consumption Allowed");
     }
@@ -2034,15 +2046,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setConsumptionAllowed(false);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setConsumptionAllowed(false);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Consumption Not Allowed");
     }
@@ -2052,15 +2062,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setRefundsAllowed(true);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setRefundsAllowed(true);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Refunds Allowed");
     }
@@ -2070,15 +2078,13 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
-        for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setRefundsAllowed(false);
-                ampsToUpdate.add(amp);
-            }
+        List<Amp> ampsToUpdate = fetchAmpsInBatches(ampDtosSelected);
+        for (Amp amp : ampsToUpdate) {
+            amp.setRefundsAllowed(false);
         }
-        ampFacade.batchEdit(ampsToUpdate);
+        if (!ampsToUpdate.isEmpty()) {
+            ampFacade.batchEdit(ampsToUpdate);
+        }
         fillAmpsDto();
         JsfUtil.addSuccessMessage(ampsToUpdate.size() + " AMP(s) marked as Refunds Not Allowed");
     }
