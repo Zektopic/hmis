@@ -33,6 +33,10 @@ public class StockFacade extends AbstractFacade<Stock> {
         super(Stock.class);
     }
 
+    public void batchEdit(List<Stock> e) {
+        super.batchEdit(e);
+    }
+
     /**
      * Finds a Stock by id with its itemBatch association force-loaded via
      * JOIN FETCH so the returned entity carries a non-null itemBatch even

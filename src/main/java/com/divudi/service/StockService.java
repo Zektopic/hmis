@@ -81,9 +81,9 @@ public class StockService {
             } else {
                 s.setItemName("UNKNOWN");
             }
-            stockFacade.edit(s);
             count++;
         }
+        stockFacade.batchEdit(allStocks);
     }
 
     // ChatGPT contributed - 2025-06
