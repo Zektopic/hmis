@@ -24,3 +24,8 @@
 **Learning:** When using configuration fetching utilities (e.g., `getLongTextValueByKey`), developers might incorrectly pass actual production/test secrets as fallback defaults instead of empty strings, leading to those secrets being permanently embedded in the source code.
 
 **Prevention:** Ensure that fallback values for secrets in configuration retrievals are strictly empty strings (`""`) or safe dummy values, and never actual keys or passwords. Code reviews should explicitly flag any hardcoded strings that look like credentials, especially in configuration loading methods.
+
+## 2026-06-19 - JPQL Injection via String Concatenation in LIKE clauses
+**Vulnerability:** Found critical JPQL injection in `AtmController.java` and `ManufacturerController.java` where user input (`query`, `getSelectText()`, `qry`) was directly concatenated into `LIKE` clauses for searches (e.g., `like '%" + query + "%'`).
+**Learning:** Controller classes frequently use string building for `LIKE` clauses instead of parameterized queries, especially when providing autocomplete suggestions or filtering tables. This is a severe vulnerability.
+**Prevention:** Always use parameterized queries (`like :query`) and pass parameters securely via a `Map<String, Object>` (e.g., `m.put("query", "%" + query + "%")`) when using `findByJpql`.

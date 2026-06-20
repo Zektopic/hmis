@@ -48,7 +48,10 @@ public class ManufacturerController implements Serializable {
 
     public List<Institution> completeManu(String qry) {
         if (qry != null) {
-            institutionList = getFacade().findByJpql("select c from Institution c where c.institutionType=com.divudi.core.data.InstitutionType.Manufacturer and c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            String sql = "select c from Institution c where c.institutionType=com.divudi.core.data.InstitutionType.Manufacturer and c.retired=false and UPPER(c.name) like :query order by c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("query", "%" + qry.toUpperCase() + "%");
+            institutionList = getFacade().findByJpql(sql, m);
         }
         if (institutionList == null) {
             institutionList = new ArrayList<>();
