@@ -1944,13 +1944,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setDiscountAllowed(true);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setDiscountAllowed(true);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -1962,13 +1973,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setDiscountAllowed(false);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setDiscountAllowed(false);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -1980,13 +2002,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setAllowFractions(true);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setAllowFractions(true);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -1998,13 +2031,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setAllowFractions(false);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setAllowFractions(false);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -2016,13 +2060,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setConsumptionAllowed(true);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setConsumptionAllowed(true);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -2034,13 +2089,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setConsumptionAllowed(false);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setConsumptionAllowed(false);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -2052,13 +2118,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setRefundsAllowed(true);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setRefundsAllowed(true);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();
@@ -2070,13 +2147,24 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        List<Amp> ampsToUpdate = new ArrayList<>();
+        List<Long> ids = new ArrayList<>();
         for (com.divudi.core.data.dto.AmpDto dto : ampDtosSelected) {
-            Amp amp = ampFacade.find(dto.getId());
-            if (amp != null) {
-                amp.setRefundsAllowed(false);
-                ampsToUpdate.add(amp);
+            if (dto.getId() != null) {
+                ids.add(dto.getId());
             }
+        }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("ids", ids);
+        String sql = "SELECT a FROM Amp a WHERE a.id IN :ids";
+        List<Amp> ampsToUpdate = ampFacade.findByJpql(sql, m);
+
+        for (Amp amp : ampsToUpdate) {
+            amp.setRefundsAllowed(false);
         }
         ampFacade.batchEdit(ampsToUpdate);
         fillAmpsDto();

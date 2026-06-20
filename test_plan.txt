@@ -1,0 +1,14 @@
+1. The objective is to fix N+1 query issue in the DTO-based bulk update methods in `src/main/java/com/divudi/bean/pharmacy/PharmacyController.java`.
+2. The methods that need fixing are:
+   - `bulkUpdateDiscountAllowedDto`
+   - `bulkUpdateDiscountNotAllowedDto`
+   - `bulkUpdateFractionsAllowedDto`
+   - `bulkUpdateFractionsNotAllowedDto`
+   - `bulkUpdateConsumptionAllowedDto`
+   - `bulkUpdateConsumptionNotAllowedDto`
+   - `bulkUpdateRefundsAllowedDto`
+   - `bulkUpdateRefundsNotAllowedDto`
+3. These methods iterate through `ampDtosSelected`, call `ampFacade.find(dto.getId())` inside the loop, and update the entity. This creates an N+1 queries problem as a query is executed for each AMP selected.
+4. The solution is to fetch all selected AMPs in a single query before the loop. We can collect the IDs of the DTOs into a list, and then use `ampFacade.findByJpql` with an `IN` clause to fetch all the AMP entities at once.
+5. Create a parameterized JPQL query like: `SELECT a FROM Amp a WHERE a.id IN :ids`
+6. Map the fetched entities by ID to efficiently update them in the loop, or simply iterate through the fetched entities if their order doesn't matter (since we are setting a boolean flag on all of them, order doesn't matter, we can just iterate over the fetched list).
