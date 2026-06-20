@@ -71,7 +71,9 @@ public class ReportFormatController implements Serializable {
     }
 
     public List<ReportFormat> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from ReportFormat c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("searchStr", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from ReportFormat c where c.retired=false and upper(c.name) like :searchStr order by c.name", params);
         return selectedItems;
     }
 
