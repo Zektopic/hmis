@@ -868,26 +868,17 @@ public class Lims {
                         if (ixi.getTube() == null) {
                             continue;
                         }
-//                        if (ixi.getSample() == null) {
-//                            continue;
-//                        }
 
                         j = "select ps from PatientSample ps "
                                 + " where ps.tube=:tube "
-                                //                                + " and ps.sample=:sample "
-                                //                                + " and ps.machine=:machine "
                                 + " and ps.patient=:pt "
                                 + " and ps.bill=:bill ";
-//                                + " and ps.collected=:ca
                         m = new HashMap();
                         m.put("tube", ixi.getTube());
 
-//                        m.put("sample", ixi.getSample());
-//                        m.put("machine", ixi.getMachine());
                         m.put("pt", b.getPatient());
 
                         m.put("bill", b);
-//                        m.put("ca", false);
                         if (ix.isHasMoreThanOneComponant()) {
                             j += " and ps.investigationComponant=:sc ";
                             m.put("sc", ixi.getSampleComponent());
@@ -1029,26 +1020,17 @@ public class Lims {
                         if (ixi.getTube() == null) {
                             continue;
                         }
-//                        if (ixi.getSample() == null) {
-//                            continue;
-//                        }
 
                         j = "select ps from PatientSample ps "
                                 + " where ps.tube=:tube "
-                                //                                + " and ps.sample=:sample "
-                                //                                + " and ps.machine=:machine "
                                 + " and ps.patient=:pt "
                                 + " and ps.bill=:bill ";
-//                                + " and ps.collected=:ca
                         m = new HashMap();
                         m.put("tube", ixi.getTube());
 
-//                        m.put("sample", ixi.getSample());
-//                        m.put("machine", ixi.getMachine());
                         m.put("pt", b.getPatient());
 
                         m.put("bill", b);
-//                        m.put("ca", false);
                         if (ix.isHasMoreThanOneComponant()) {
                             j += " and ps.investigationComponant=:sc ";
                             m.put("sc", ixi.getSampleComponent());
