@@ -473,8 +473,61 @@ public class UserManagementApi {
 
             List<Map<String, Object>> summary = new ArrayList<>();
             List<Map<String, Object>> skippedUsers = new ArrayList<>();
+
+            // 1. Batch fetch users
+            Map<Long, WebUser> userMap = new HashMap<>();
+            List<WebUser> users = new ArrayList<>();
+            if (req.getUserIds() != null && !req.getUserIds().isEmpty()) {
+                Map<String, Object> userParams = new HashMap<>();
+                userParams.put("userIds", req.getUserIds());
+                users = webUserFacade.findByJpql("select u from WebUser u where u.id in :userIds", userParams);
+                for (WebUser u : users) {
+                    userMap.put(u.getId(), u);
+                }
+            }
+
+            // 2. Batch fetch user departments if fixedDept is null
+            Map<Long, List<Department>> userDeptsMap = new HashMap<>();
+            if (fixedDept == null && !users.isEmpty()) {
+                Map<String, Object> deptParams = new HashMap<>();
+                deptParams.put("users", users);
+                List<WebUserDepartment> userDepts = webUserDepartmentFacade.findByJpql(
+                        "select d from WebUserDepartment d where d.retired=false and d.webUser in :users",
+                        deptParams);
+                for (WebUserDepartment wud : userDepts) {
+                    if (wud.getDepartment() != null) {
+                        userDeptsMap.computeIfAbsent(wud.getWebUser().getId(), k -> new ArrayList<>()).add(wud.getDepartment());
+                    }
+                }
+            }
+
+            // 3. Batch fetch existing privileges
+            Set<String> existingPrivilegesSet = new HashSet<>();
+            if (!users.isEmpty() && !privileges.isEmpty()) {
+                Map<String, Object> privParams = new HashMap<>();
+                privParams.put("users", users);
+                privParams.put("privs", privileges);
+
+                String privJpql;
+                if (fixedDept != null) {
+                    privParams.put("dept", fixedDept);
+                    privJpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser in :users and wp.privilege in :privs and wp.department = :dept";
+                } else {
+                    privJpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser in :users and wp.privilege in :privs";
+                }
+
+                List<WebUserPrivilege> existingPrivs = webUserPrivilegeFacade.findByJpql(privJpql, privParams);
+                for (WebUserPrivilege wp : existingPrivs) {
+                    if (wp.getDepartment() != null && wp.getWebUser() != null && wp.getPrivilege() != null) {
+                        existingPrivilegesSet.add(wp.getWebUser().getId() + "-" + wp.getDepartment().getId() + "-" + wp.getPrivilege().name());
+                    }
+                }
+            }
+
+            List<WebUserPrivilege> newPrivilegesToCreate = new ArrayList<>();
+
             for (Long userId : req.getUserIds()) {
-                WebUser u = webUserFacade.find(userId);
+                WebUser u = userMap.get(userId);
                 if (u == null || u.isRetired()) {
                     Map<String, Object> skipped = new HashMap<>();
                     skipped.put("userId", userId);
@@ -488,46 +541,47 @@ public class UserManagementApi {
                 if (fixedDept != null) {
                     targetDepts.add(fixedDept);
                 } else {
-                    List<WebUserDepartment> userDepts = webUserDepartmentFacade.findByJpql(
-                            "select d from WebUserDepartment d where d.retired=false and d.webUser=:u",
-                            Collections.singletonMap("u", u));
-                    for (WebUserDepartment wud : userDepts) {
-                        if (wud.getDepartment() != null) targetDepts.add(wud.getDepartment());
+                    List<Department> uDepts = userDeptsMap.get(u.getId());
+                    if (uDepts != null) {
+                        targetDepts.addAll(uDepts);
                     }
                 }
 
                 int added = 0;
-                int skipped = 0;
+                int skippedCount = 0;
                 for (Department dept : targetDepts) {
                     for (Privileges p : privileges) {
-                        Map<String, Object> check = new HashMap<>();
-                        check.put("u", u);
-                        check.put("p", p);
-                        check.put("d", dept);
-                        List<WebUserPrivilege> ex = webUserPrivilegeFacade.findByJpql(
-                                "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege=:p and wp.department=:d",
-                                check);
-                        if (!ex.isEmpty()) {
-                            skipped++;
+                        String key = u.getId() + "-" + dept.getId() + "-" + p.name();
+                        if (existingPrivilegesSet.contains(key)) {
+                            skippedCount++;
                             continue;
                         }
+
                         WebUserPrivilege wp = new WebUserPrivilege();
                         wp.setWebUser(u);
                         wp.setPrivilege(p);
                         wp.setDepartment(dept);
                         wp.setCreater(apiUser);
                         wp.setCreatedAt(new Date());
-                        webUserPrivilegeFacade.create(wp);
+
+                        newPrivilegesToCreate.add(wp);
+                        existingPrivilegesSet.add(key); // prevent duplicates within the same batch request
                         added++;
                     }
                 }
+
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("userId", u.getId());
                 entry.put("userName", u.getName());
                 entry.put("privilegesAdded", added);
-                entry.put("privilegesSkipped", skipped);
+                entry.put("privilegesSkipped", skippedCount);
                 summary.add(entry);
             }
+
+            if (!newPrivilegesToCreate.isEmpty()) {
+                webUserPrivilegeFacade.batchCreate(newPrivilegesToCreate);
+            }
+
             Map<String, Object> result = new HashMap<>();
             result.put("processed", summary);
             result.put("skippedUsers", skippedUsers);

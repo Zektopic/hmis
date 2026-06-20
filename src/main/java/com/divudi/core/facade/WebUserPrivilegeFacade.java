@@ -26,4 +26,9 @@ public class WebUserPrivilegeFacade extends AbstractFacade<WebUserPrivilege> {
     public WebUserPrivilegeFacade() {
         super(WebUserPrivilege.class);
     }
+
+    @Override
+    public void batchCreate(java.util.List<WebUserPrivilege> entities) {
+        super.batchCreate(entities);
+    }
 }
