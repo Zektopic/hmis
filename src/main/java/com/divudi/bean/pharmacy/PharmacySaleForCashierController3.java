@@ -4735,6 +4735,32 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
             return;
         }
 
+        // PERFORMANCE: Pre-fetch cost rates for all item batches to avoid N+1 queries
+        java.util.List<Long> batchIds = new java.util.ArrayList<>();
+        for (BillItem billItem : bill.getBillItems()) {
+            if (billItem != null && !billItem.isRetired() && billItem.getPharmaceuticalBillItem() != null) {
+                if (billItem.getPharmaceuticalBillItem().getItemBatch() != null && billItem.getPharmaceuticalBillItem().getItemBatch().getId() != null) {
+                    batchIds.add(billItem.getPharmaceuticalBillItem().getItemBatch().getId());
+                }
+            }
+        }
+
+        java.util.Map<Long, Double> batchCostRates = new java.util.HashMap<>();
+        if (!batchIds.isEmpty()) {
+            String jpql = "SELECT i.id, i.costRate FROM ItemBatch i WHERE i.id IN :batchIds";
+            java.util.Map<String, Object> params = new java.util.HashMap<>();
+            params.put("batchIds", batchIds);
+
+            java.util.List<Object[]> results = itemBatchFacade.findAggregates(jpql, params);
+            if (results != null) {
+                for (Object[] row : results) {
+                    if (row.length >= 2 && row[0] != null && row[1] != null) {
+                        batchCostRates.put((Long) row[0], (Double) row[1]);
+                    }
+                }
+            }
+        }
+
         // Initialize bill-level totals
         BigDecimal totalRetailSaleValue = BigDecimal.ZERO;
         BigDecimal totalPurchaseValue = BigDecimal.ZERO;
@@ -4769,8 +4795,8 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
 
             // Get cost rate from item batch (correct approach) with fallback to purchase rate
             BigDecimal costRate = purchaseRate; // default fallback
-            if (pharmaItem.getItemBatch() != null) {
-                Double batchCostRate = pharmaItem.getItemBatch().getCostRate();
+            if (pharmaItem.getItemBatch() != null && pharmaItem.getItemBatch().getId() != null) {
+                Double batchCostRate = batchCostRates.get(pharmaItem.getItemBatch().getId());
                 if (batchCostRate != null && batchCostRate > 0) {
                     costRate = BigDecimal.valueOf(batchCostRate);
                 } else {
@@ -6240,6 +6266,32 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
             }
         }
 
+        // PERFORMANCE: Pre-fetch cost rates for all item batches to avoid N+1 queries
+        java.util.List<Long> batchIds = new java.util.ArrayList<>();
+        for (BillItem billItem : bill.getBillItems()) {
+            if (billItem != null && billItem.isConsideredForCosting() && billItem.getPharmaceuticalBillItem() != null) {
+                if (billItem.getPharmaceuticalBillItem().getItemBatch() != null && billItem.getPharmaceuticalBillItem().getItemBatch().getId() != null) {
+                    batchIds.add(billItem.getPharmaceuticalBillItem().getItemBatch().getId());
+                }
+            }
+        }
+
+        java.util.Map<Long, Double> batchCostRates = new java.util.HashMap<>();
+        if (!batchIds.isEmpty()) {
+            String jpql = "SELECT i.id, i.costRate FROM ItemBatch i WHERE i.id IN :batchIds";
+            java.util.Map<String, Object> params = new java.util.HashMap<>();
+            params.put("batchIds", batchIds);
+
+            java.util.List<Object[]> results = itemBatchFacade.findAggregates(jpql, params);
+            if (results != null) {
+                for (Object[] row : results) {
+                    if (row.length >= 2 && row[0] != null && row[1] != null) {
+                        batchCostRates.put((Long) row[0], (Double) row[1]);
+                    }
+                }
+            }
+        }
+
         // Initialize aggregated values
         java.math.BigDecimal totalCostValue = java.math.BigDecimal.ZERO;
         java.math.BigDecimal totalPurchaseValue = java.math.BigDecimal.ZERO;
@@ -6291,8 +6343,8 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
                 }
                 // Calculate value at cost rate - use actual cost rate from ItemBatch
                 Double costRateValue = null;
-                if (pharmaItem.getItemBatch() != null) {
-                    costRateValue = pharmaItem.getItemBatch().getCostRate();
+                if (pharmaItem.getItemBatch() != null && pharmaItem.getItemBatch().getId() != null) {
+                    costRateValue = batchCostRates.get(pharmaItem.getItemBatch().getId());
                 }
 
                 if (costRateValue == null || costRateValue <= 0) {
