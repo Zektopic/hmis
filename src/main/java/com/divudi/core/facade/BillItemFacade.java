@@ -35,6 +35,11 @@ public class BillItemFacade extends AbstractFacade<BillItem> {
         super(BillItem.class);
     }
 
+    @Override
+    public void batchCreate(List<BillItem> entities) {
+        super.batchCreate(entities);
+    }
+
     /**
      * Loads a Bill with all its BillItems and PharmaceuticalBillItems in a fresh
      * REQUIRES_NEW transaction. This is necessary after bulk native SQL INSERTs

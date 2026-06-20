@@ -563,16 +563,15 @@ public class TransferReceiveCancellationController implements Serializable {
             cancellationBill.setComments(cancellationReason);
             billFacade.create(cancellationBill);
 
-            // Save all bill items (cascade will handle PharmaceuticalBillItem and BillItemFinanceDetails)
+            // First pass: update bi-directional links before persistence
             for (BillItem item : cancellationBill.getBillItems()) {
-                // Save bill item - cascade will persist PharmaceuticalBillItem
-                billItemFacade.create(item);
-
-                // Update finance details with bill item reference (for bi-directional link)
                 if (item.getBillItemFinanceDetails() != null) {
                     item.getBillItemFinanceDetails().setBillItem(item);
                 }
             }
+
+            // Save all bill items in batch (cascade will handle PharmaceuticalBillItem and BillItemFinanceDetails)
+            billItemFacade.batchCreate(cancellationBill.getBillItems());
 
             // Generate bill numbers
             String deptId = billNumberBean.institutionBillNumberGenerator(
