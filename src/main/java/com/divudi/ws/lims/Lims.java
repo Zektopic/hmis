@@ -131,37 +131,6 @@ public class Lims {
         }
     }
 
-//    @GET
-//    @Path("/samples/login/{username}/{password}")
-//    @Produces("application/json")
-//    public String checkUserCredentails(
-//            @PathParam("username") String username,
-//            @PathParam("password") String password) {
-//        boolean failed = false;
-//        JSONArray array = new JSONArray();
-//        JSONObject jSONObjectOut = new JSONObject();
-//        String errMsg = "";
-//        WebUser requestSendingUser = findRequestSendingUser(username, password);
-//        if (requestSendingUser == null) {
-//            errMsg += "Username / password mismatch.";
-//            failed = true;
-//        }
-//        if (failed) {
-//            JSONObject jSONObject = new JSONObject();
-//            jSONObject.put("result", "error");
-//            jSONObject.put("error", true);
-//            jSONObject.put("errorMessage", errMsg);
-//            jSONObject.put("errorCode", 1);
-//            return jSONObject.toString();
-//        } else {
-//            JSONObject jSONObject = new JSONObject();
-//            jSONObject.put("result", "success");
-//            jSONObject.put("error", false);
-//            jSONObject.put("successMessage", "Successfully Logged.");
-//            jSONObject.put("successCode", -1);
-//            return jSONObject.toString();
-//        }
-//    }
     @GET
     @Path("/samples/login/{username}/{password}")
     @Produces("application/json")
