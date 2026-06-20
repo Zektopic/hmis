@@ -1332,6 +1332,28 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
         int skippedCount = 0;
         StringBuilder skippedItems = new StringBuilder();
 
+        // Prepare list of stock IDs to fetch in a single query
+        java.util.Set<Long> stockIds = new java.util.HashSet<>();
+        for (BillItem billItem : getPreBill().getBillItems()) {
+            if (billItem != null && billItem.getQty() != null && billItem.getQty() > 0 &&
+                billItem.getPharmaceuticalBillItem() != null &&
+                billItem.getPharmaceuticalBillItem().getStock() != null) {
+                stockIds.add(billItem.getPharmaceuticalBillItem().getStock().getId());
+            }
+        }
+
+        // Fetch stocks in batch to avoid N+1 query issue
+        java.util.Map<Long, Stock> stockMap = new java.util.HashMap<>();
+        if (!stockIds.isEmpty()) {
+            String jpql = "SELECT s FROM Stock s WHERE s.id IN :ids";
+            java.util.Map<String, Object> params = new java.util.HashMap<>();
+            params.put("ids", stockIds);
+            java.util.List<Stock> stocks = stockFacade.findByJpql(jpql, params);
+            for (Stock s : stocks) {
+                stockMap.put(s.getId(), s);
+            }
+        }
+
         for (BillItem billItem : getPreBill().getBillItems()) {
             try {
                 if (billItem == null || billItem.getQty() == null || billItem.getQty() <= 0) {
@@ -1346,8 +1368,8 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
                     continue;
                 }
 
-                // Fetch latest stock information
-                Stock currentStock = stockFacade.find(billItem.getPharmaceuticalBillItem().getStock().getId());
+                // Fetch latest stock information from map
+                Stock currentStock = stockMap.get(billItem.getPharmaceuticalBillItem().getStock().getId());
 
                 if (currentStock == null) {
                     skippedCount++;
