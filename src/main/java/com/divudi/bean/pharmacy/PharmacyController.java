@@ -1928,12 +1928,17 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("No AMPs Selected");
             return;
         }
-        int count = 0;
+        int count = ampsSelected.size();
+        java.util.List<Long> ids = new java.util.ArrayList<>();
         for (Amp i : ampsSelected) {
-            i.setRefundsAllowed(false);
-            count++;
+            ids.add(i.getId());
+            i.setRefundsAllowed(false); // Update in-memory objects just in case
         }
-        ampFacade.batchEdit(ampsSelected);
+        String jpql = "UPDATE Amp a SET a.refundsAllowed = false WHERE a.id IN :ids";
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("ids", ids);
+        ampFacade.updateByJpql(jpql, params);
+
         fillAmps();
         JsfUtil.addSuccessMessage(count + " AMP(s) marked as Refunds Not Allowed");
     }

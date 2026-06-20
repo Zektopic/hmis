@@ -27,4 +27,9 @@ public class AmpFacade extends AbstractFacade<Amp> {
         super(Amp.class);
     }
 
+    @Override
+    public int updateByJpql(String jpql, java.util.Map<String, Object> parameters) {
+        return super.updateByJpql(jpql, parameters);
+    }
+
 }
