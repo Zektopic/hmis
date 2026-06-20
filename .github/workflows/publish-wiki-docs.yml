@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: github-pages
@@ -21,8 +23,6 @@ jobs:
     steps:
       - name: Checkout main repository
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,13 +34,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install "mkdocs-material==9.6.15"
 
-      - name: Clone GitHub Wiki
+      - name: Prepare documentation source
         run: |
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki-source
-
-      - name: Convert Wiki to MkDocs format
-        run: |
-          python tools/convert-wiki-for-mkdocs.py wiki-source docs
+          # Attempt to clone the GitHub Wiki (may not exist yet).
+          # If the wiki exists, use it as the documentation source.
+          # Otherwise, fall back to developer_docs from the repository.
+          if git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.wiki.git wiki-source 2>/dev/null; then
+            echo "Wiki cloned successfully - converting to MkDocs"
+            python tools/convert-wiki-for-mkdocs.py wiki-source docs
+          else
+            echo "Wiki repository not found - using developer_docs as documentation source"
+            rm -rf docs
+            cp -r developer_docs docs
+            if [ ! -f docs/index.md ] && [ ! -f docs/Home.md ] && [ ! -f docs/README.md ]; then
+              echo "# HMIS Documentation" > docs/index.md
+              echo "" >> docs/index.md
+              echo "Welcome to the HMIS documentation." >> docs/index.md
+            fi
+          fi
 
       - name: Copy extra site files
         run: |
@@ -54,7 +65,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: site
 
