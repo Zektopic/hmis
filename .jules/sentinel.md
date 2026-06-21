@@ -24,7 +24,6 @@
 **Learning:** When using configuration fetching utilities (e.g., `getLongTextValueByKey`), developers might incorrectly pass actual production/test secrets as fallback defaults instead of empty strings, leading to those secrets being permanently embedded in the source code.
 
 **Prevention:** Ensure that fallback values for secrets in configuration retrievals are strictly empty strings (`""`) or safe dummy values, and never actual keys or passwords. Code reviews should explicitly flag any hardcoded strings that look like credentials, especially in configuration loading methods.
-
 ## 2026-06-19 - JPQL Injection via String Concatenation in LIKE clauses
 **Vulnerability:** Found critical JPQL injection in `AtmController.java` and `ManufacturerController.java` where user input (`query`, `getSelectText()`, `qry`) was directly concatenated into `LIKE` clauses for searches (e.g., `like '%" + query + "%'`).
 **Learning:** Controller classes frequently use string building for `LIKE` clauses instead of parameterized queries, especially when providing autocomplete suggestions or filtering tables. This is a severe vulnerability.
@@ -39,3 +38,8 @@
 **Vulnerability:** Found string concatenations in JPQL query formations (e.g. `String sql = "Select f from ItemFee f where f.retired=false and f.item.id = " + item.getId();`). While `.getId()` is generally strongly typed to return numeric objects mitigating some injection scenarios, this pattern causes statement cache pollution and is a bad security hygiene.
 **Learning:** Found over 100 occurrences of such unparameterized string concatenations.
 **Prevention:** Continuously monitor and refactor occurrences to strictly use map parameterized queries with `findByJpql(sql, params)`.
+
+## 2026-06-18 - Parameterized JPQL Query Fixes using Fully Qualified Names
+**Vulnerability:** Unparameterized string concatenation in JPQL queries creating SQL injection vulnerabilities.
+**Learning:** When applying security fixes to existing Java files to resolve SQL injection, utilizing fully qualified class names like `java.util.Map` and `java.util.HashMap` within the method prevents the need to alter imports at the top of the file, reducing the risk of build failures or conflicting imports.
+**Prevention:** Use parameterized queries with a parameter map passed to `findByJpql(sql, map)`, employing fully qualified class names when instantiating the map inline.

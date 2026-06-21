@@ -635,8 +635,11 @@ public class ClinicScheduleController implements Serializable {
             suggestions = new ArrayList<>();
         } else {
             if (getCurrentStaff() != null) {
-                sql = "select p from ServiceSession p where p.retired=false and (p.name) like '%" + query.toUpperCase() + "%' and p.staff.id = " + getCurrentStaff().getId() + " order by p.name";
-                suggestions = getFacade().findByJpql(sql);
+                sql = "select p from ServiceSession p where p.retired=false and upper(p.name) like :q and p.staff.id = :staffId order by p.name";
+                java.util.Map<String, Object> m = new java.util.HashMap<>();
+                m.put("q", "%" + query.toUpperCase() + "%");
+                m.put("staffId", getCurrentStaff().getId());
+                suggestions = getFacade().findByJpql(sql, m);
             } else {
                 suggestions = new ArrayList<>();
             }
