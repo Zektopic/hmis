@@ -32,4 +32,9 @@ public class AmpFacade extends AbstractFacade<Amp> {
         return super.updateByJpql(jpql, parameters);
     }
 
+    @Override
+    public void batchEdit(java.util.List<Amp> entities) {
+        super.batchEdit(entities);
+    }
+
 }
