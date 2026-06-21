@@ -34,3 +34,8 @@
 **Vulnerability:** Found a critical SQL injection point in `ReportFormatController.java` where user input via `getSelectText()` was directly concatenated into a JPQL string within a LIKE clause.
 **Learning:** Similar to past findings, the application's search functionality inside JSF controllers frequently builds JPQL dynamically using string concatenation with `like '%" + <parameter> + "%'`, completely bypassing query parameterization and exposing the system to injection attacks.
 **Prevention:** Consistently utilize parameterized queries for ALL user input via `java.util.Map<String, Object>` passed into the `findByJpql` facade methods instead of interpolating strings directly into the query.
+
+## 2025-06-17 - Prevent JPQL Injection and Cache Pollution in ApiMembership
+**Vulnerability:** Found string concatenations in JPQL query formations (e.g. `String sql = "Select f from ItemFee f where f.retired=false and f.item.id = " + item.getId();`). While `.getId()` is generally strongly typed to return numeric objects mitigating some injection scenarios, this pattern causes statement cache pollution and is a bad security hygiene.
+**Learning:** Found over 100 occurrences of such unparameterized string concatenations.
+**Prevention:** Continuously monitor and refactor occurrences to strictly use map parameterized queries with `findByJpql(sql, params)`.
