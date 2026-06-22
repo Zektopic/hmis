@@ -2054,16 +2054,18 @@ public class ChannelApi {
     @Path("/json")
     @Produces("application/json")
     public String getJson() {
-        //TODO return proper representation object
-        return "<html><h:body><h1>Hello, World!!</h:body></h1></html>";
+        JSONObject response = new JSONObject();
+        response.put("message", "Hello, World!!");
+        return response.toString();
     }
 
     @GET
     @Path("/json2")
-    @Produces("text/html")
+    @Produces("application/json")
     public String getJson2() {
-        //TODO return proper representation object
-        return "<html><h:body><h1>Hello, World 2!!</h:body></h1></html>";
+        JSONObject response = new JSONObject();
+        response.put("message", "Hello, World 2!!");
+        return response.toString();
     }
 
     @GET
