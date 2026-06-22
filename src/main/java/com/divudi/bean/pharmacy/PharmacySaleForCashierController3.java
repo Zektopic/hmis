@@ -2331,7 +2331,7 @@ public class PharmacySaleForCashierController3 implements Serializable, Controll
 
         //Bill Item
 //        billItem.setInwardChargeType(InwardChargeType.Medicine);
-        // PERFORMANCE FIX: Use DTO fields and entity proxies to avoid database query
+        // PERFORMANCE OPTIMIZATION: Use DTO fields and entity proxies to avoid database query
         // Previously: stockEntity.getItemBatch() triggered database load defeating getReference() optimization
         // Now: Use proxy references and DTO data directly - zero database queries
         long beforeEntityRefs = System.currentTimeMillis();
