@@ -816,7 +816,7 @@ public class TransferReceiveController implements Serializable {
                 bifd.setTotalCostRate(BigDecimal.ZERO);
             }
 
-            // Fix: Set value calculations with correct rates
+            // Set value calculations with correct rates
             bifd.setValueAtPurchaseRate(BigDecimal.valueOf(purchaseRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO)); // VALUEATPURCHASERATE
             bifd.setValueAtRetailRate(BigDecimal.valueOf(retailRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO)); // VALUEATRETAILRATE  
             bifd.setValueAtCostRate(BigDecimal.valueOf(costRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO)); // VALUEATCOSTRATE
