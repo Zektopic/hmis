@@ -77,7 +77,7 @@ import javax.transaction.Transactional;
  * Cancellation:     Dept Stock -= qty, Staff Stock += qty (reversal)
  * </pre>
  *
- * <h3>Issue #15797 Fix:</h3>
+ * <h3>Issue #15797 Resolution:</h3>
  * <p>This controller creates complete BillFinanceDetails and BillItemFinanceDetails
  * with proper TYPE(b) support in DTOs, ensuring cancelled receive amounts are correctly
  * deducted from transfer receive summary reports.</p>
@@ -356,7 +356,7 @@ public class TransferReceiveCancellationController implements Serializable {
     /**
      * Creates reversed finance details for cancellation bill item.
      *
-     * <h3>CRITICAL FIX for Issue #15797: Reversed Sign Convention</h3>
+     * <h3>CRITICAL for Issue #15797: Reversed Sign Convention</h3>
      * <p>Transfer Receive Cancellation reverses the original receive:</p>
      * <ul>
      *   <li>Quantity: NEGATIVE (stock goes out from receiving dept)</li>
@@ -688,7 +688,7 @@ public class TransferReceiveCancellationController implements Serializable {
     /**
      * Updates the original Transfer Issue bill's fullyIssued status after receive cancellation.
      *
-     * <p>CRITICAL FIX: When a receive is cancelled, the original Transfer Issue bill
+     * <p>CRITICAL: When a receive is cancelled, the original Transfer Issue bill
      * should have its fullyIssued status recalculated. If any issued quantity is now
      * not fully received (due to this cancellation), the issue bill should be marked
      * as NOT fully issued, allowing new receives to be created.</p>
