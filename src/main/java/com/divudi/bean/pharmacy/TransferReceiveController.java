@@ -790,7 +790,7 @@ public class TransferReceiveController implements Serializable {
             tmp = paidQty * costRate;
             costNonFree += tmp;
 
-            // Fix: Set GROSSRATE to the actual gross rate from line gross rate
+            // Set GROSSRATE to the actual gross rate from line gross rate
             bifd.setGrossRate(bifd.getLineGrossRate() != null ? bifd.getLineGrossRate() : BigDecimal.ZERO);
 
             BigDecimal biNetTotal = bifd.getNetTotal();
@@ -804,9 +804,9 @@ public class TransferReceiveController implements Serializable {
             double itemCostNonFree = paidQty * costRate;
             bifd.setTotalCost(BigDecimal.valueOf(itemCostFree + itemCostNonFree));
 
-            // Fix: Set LINECOSTRATE to the actual cost rate from ItemBatch
+            // Set LINECOSTRATE to the actual cost rate from ItemBatch
             bifd.setLineCostRate(BigDecimal.valueOf(costRate));
-            // Fix: Set LINECOST using cost rate × quantity
+            // Set LINECOST using cost rate × quantity
             bifd.setLineCost(BigDecimal.valueOf(costRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO));
 
             if (bifd.getQuantityByUnits() != null && bifd.getQuantityByUnits().compareTo(BigDecimal.ZERO) > 0) {
@@ -816,7 +816,7 @@ public class TransferReceiveController implements Serializable {
                 bifd.setTotalCostRate(BigDecimal.ZERO);
             }
 
-            // Fix: Set value calculations with correct rates
+            // Set value calculations with correct rates
             bifd.setValueAtPurchaseRate(BigDecimal.valueOf(purchaseRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO)); // VALUEATPURCHASERATE
             bifd.setValueAtRetailRate(BigDecimal.valueOf(retailRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO)); // VALUEATRETAILRATE  
             bifd.setValueAtCostRate(BigDecimal.valueOf(costRate).multiply(bifd.getTotalQuantity() != null ? bifd.getTotalQuantity() : BigDecimal.ZERO)); // VALUEATCOSTRATE
