@@ -383,12 +383,12 @@ public class FinancialReport {
     }
 
     public List<BillTypeAtomic> getBillTypesForRefundedCash() {
-        //TODO: Use a List of Bill Type Atomics instead of calling the findBy methods
         if (billTypesForRefundedCash == null) {
-            billTypesForRefundedCash = new ArrayList<>();
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.REFUND));
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.CANCELLATION));
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.PAYMENTS));
+            billTypesForRefundedCash = java.util.Arrays.stream(BillTypeAtomic.values())
+                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
+                            || e.getBillCategory() == BillCategory.CANCELLATION
+                            || e.getBillCategory() == BillCategory.PAYMENTS)
+                    .collect(java.util.stream.Collectors.toList());
         }
         return billTypesForRefundedCash;
     }
