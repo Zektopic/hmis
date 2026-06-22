@@ -5,7 +5,9 @@
 package com.divudi.core.data;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -383,12 +385,12 @@ public class FinancialReport {
     }
 
     public List<BillTypeAtomic> getBillTypesForRefundedCash() {
-        //TODO: Use a List of Bill Type Atomics instead of calling the findBy methods
         if (billTypesForRefundedCash == null) {
-            billTypesForRefundedCash = new ArrayList<>();
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.REFUND));
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.CANCELLATION));
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.PAYMENTS));
+            billTypesForRefundedCash = Arrays.stream(BillTypeAtomic.values())
+                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
+                            || e.getBillCategory() == BillCategory.CANCELLATION
+                            || e.getBillCategory() == BillCategory.PAYMENTS)
+                    .collect(Collectors.toList());
         }
         return billTypesForRefundedCash;
     }
@@ -503,13 +505,13 @@ public class FinancialReport {
     }
 
     public List<BillTypeAtomic> getBillTypesForRefundedCreditCard() {
-        //TODO: Use a List of Bill Type Atomics instead of calling the findBy methods
         if (billTypesForRefundedCreditCard == null) {
-            billTypesForRefundedCreditCard = new ArrayList<>();
             // Add BillTypeAtomic entries that represent credit card refunds
             // Assuming CHANNEL_REFUND is refunded via credit card
-            billTypesForRefundedCreditCard.addAll(BillTypeAtomic.findByCategory(BillCategory.REFUND));
-            billTypesForRefundedCreditCard.addAll(BillTypeAtomic.findByCategory(BillCategory.CANCELLATION));
+            billTypesForRefundedCreditCard = Arrays.stream(BillTypeAtomic.values())
+                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
+                            || e.getBillCategory() == BillCategory.CANCELLATION)
+                    .collect(Collectors.toList());
             // Add other BillTypeAtomic entries if they are refunded via credit card
         }
         return billTypesForRefundedCreditCard;
@@ -587,15 +589,14 @@ public class FinancialReport {
     }
 
     public List<BillTypeAtomic> getBillTypesForRefundedDebitCard() {
-        //TODO: Use a List of Bill Type Atomics instead of calling the findBy methods
         if (billTypesForRefundedDebitCard == null) {
-            billTypesForRefundedDebitCard = new ArrayList<>();
             // Add BillTypeAtomic entries related to debit card refunds
             // Assuming CHANNEL_REFUND might be refunded to a debit card
-            billTypesForRefundedDebitCard.add(BillTypeAtomic.CHANNEL_REFUND);
-            billTypesForRefundedDebitCard.addAll(BillTypeAtomic.findByCategory(BillCategory.REFUND));
-            billTypesForRefundedDebitCard.addAll(BillTypeAtomic.findByCategory(BillCategory.CANCELLATION));
-            billTypesForRefundedDebitCard.addAll(BillTypeAtomic.findByCategory(BillCategory.PAYMENTS));
+            billTypesForRefundedDebitCard = Arrays.stream(BillTypeAtomic.values())
+                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
+                            || e.getBillCategory() == BillCategory.CANCELLATION
+                            || e.getBillCategory() == BillCategory.PAYMENTS)
+                    .collect(Collectors.toList());
             // Include any other applicable BillTypeAtomic entries for debit card refunds
         }
         return billTypesForRefundedDebitCard;
