@@ -1,0 +1,26 @@
+--- src/main/java/com/divudi/ws/clinical/FavouriteMedicineApi.java
++++ src/main/java/com/divudi/ws/clinical/FavouriteMedicineApi.java
+@@ -784,8 +784,21 @@
+                 return errorResponse("Not a valid key", 401);
+             }
+
+-            // TODO: Implement in service layer
+-            return errorResponse("Not implemented yet", 501);
++            if (jsonRequest == null || jsonRequest.trim().isEmpty()) {
++                return errorResponse("Request body is required", 400);
++            }
++
++            @SuppressWarnings("unchecked")
++            Map<String, Object> requestData = gson.fromJson(jsonRequest, Map.class);
++            String instruction = (String) requestData.get("instruction");
++            if (instruction == null || instruction.trim().isEmpty()) {
++                return errorResponse("instruction field is required", 400);
++            }
++
++            Map<String, Object> result = favouriteMedicineService.parseNaturalLanguage(instruction);
++            return successResponse(result);
+
++        } catch (UnsupportedOperationException e) {
++            return errorResponse(e.getMessage(), 501);
+         } catch (Exception e) {
+             return errorResponse("An error occurred: " + e.getMessage(), 500);
