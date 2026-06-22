@@ -5,7 +5,10 @@
 package com.divudi.core.data;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  *
@@ -383,12 +386,11 @@ public class FinancialReport {
     }
 
     public List<BillTypeAtomic> getBillTypesForRefundedCash() {
-        //TODO: Use a List of Bill Type Atomics instead of calling the findBy methods
         if (billTypesForRefundedCash == null) {
-            billTypesForRefundedCash = new ArrayList<>();
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.REFUND));
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.CANCELLATION));
-            billTypesForRefundedCash.addAll(BillTypeAtomic.findByCategory(BillCategory.PAYMENTS));
+            EnumSet<BillCategory> refundCategories = EnumSet.of(BillCategory.REFUND, BillCategory.CANCELLATION, BillCategory.PAYMENTS);
+            billTypesForRefundedCash = Arrays.stream(BillTypeAtomic.values())
+                    .filter(e -> refundCategories.contains(e.getBillCategory()))
+                    .collect(Collectors.toList());
         }
         return billTypesForRefundedCash;
     }
