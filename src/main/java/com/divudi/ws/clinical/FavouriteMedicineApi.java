@@ -617,8 +617,25 @@ public class FavouriteMedicineApi {
                 return errorResponse("Not a valid key", 401);
             }
 
-            // TODO: Implement in service layer
-            return errorResponse("Not implemented yet", 501);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> requestData = gson.fromJson(jsonRequest, Map.class);
+
+            String name = (String) requestData.get("name");
+            String code = (String) requestData.get("code");
+            String unitType = (String) requestData.get("unitType");
+
+            if (name == null || name.trim().isEmpty()) {
+                return errorResponse("Measurement unit name is required", 400);
+            }
+
+            MeasurementUnit unit = favouriteMedicineService.createMeasurementUnit(user, name, code, unitType);
+
+            Map<String, Object> response = convertMeasurementUnitToMap(unit);
+
+            return successResponse(response);
+
+        } catch (IllegalArgumentException e) {
+            return errorResponse(e.getMessage(), 400);
 
         } catch (Exception e) {
             return errorResponse("An error occurred: " + e.getMessage(), 500);
