@@ -1348,7 +1348,7 @@ public class PharmacyStockTakeController implements Serializable {
 
         System.out.println("DEBUG: Optimized processing successful. Ready to persist " + physicalCountBill.getBillItems().size() + " items");
 
-        // CRITICAL FIX: Separate Bill and BillItem persistence to avoid cascade conflicts
+        // Separate Bill and BillItem persistence to avoid cascade conflicts
 
         // Step 1: Store BillItems temporarily and clear from Bill to prevent cascade persistence
         java.util.List<BillItem> billItemsToProcess = new java.util.ArrayList<>(physicalCountBill.getBillItems());
