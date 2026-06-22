@@ -302,21 +302,41 @@ public class UserManagementApi {
             PrivilegeAssignmentRequestDTO req = gson.fromJson(body, PrivilegeAssignmentRequestDTO.class);
             if (req == null || req.getPrivileges() == null || req.getPrivileges().isEmpty()) return errorResponse("privileges are required", 400);
             Department d = req.getDepartmentId() != null ? departmentFacade.find(req.getDepartmentId()) : null;
+
+            List<Privileges> validPrivileges = new ArrayList<>();
             for (String pName : req.getPrivileges()) {
-                Privileges p;
                 try {
-                    p = Privileges.valueOf(pName);
+                    validPrivileges.add(Privileges.valueOf(pName));
                 } catch (IllegalArgumentException e) {
                     return errorResponse("Invalid privilege: " + pName, 400);
                 }
+            }
+
+            Set<Privileges> existingPrivilegesSet = new HashSet<>();
+            if (!validPrivileges.isEmpty()) {
                 Map<String, Object> m = new HashMap<>();
                 m.put("u", u);
-                m.put("p", p);
-                m.put("d", d);
-                List<WebUserPrivilege> ex = webUserPrivilegeFacade.findByJpql(
-                        "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege=:p and ((:d is null and wp.department is null) or wp.department=:d)",
-                        m);
-                if (!ex.isEmpty()) continue;
+                m.put("privs", validPrivileges);
+
+                String jpql;
+                if (d != null) {
+                    m.put("d", d);
+                    jpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege in :privs and wp.department=:d";
+                } else {
+                    jpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege in :privs and wp.department is null";
+                }
+
+                List<WebUserPrivilege> existingPrivs = webUserPrivilegeFacade.findByJpql(jpql, m);
+                for (WebUserPrivilege wp : existingPrivs) {
+                    if (wp.getPrivilege() != null) {
+                        existingPrivilegesSet.add(wp.getPrivilege());
+                    }
+                }
+            }
+
+            for (Privileges p : validPrivileges) {
+                if (existingPrivilegesSet.contains(p)) continue;
+
                 WebUserPrivilege wp = new WebUserPrivilege();
                 wp.setWebUser(u);
                 wp.setPrivilege(p);
