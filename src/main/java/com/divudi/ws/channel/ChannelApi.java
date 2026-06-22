@@ -2054,8 +2054,9 @@ public class ChannelApi {
     @Path("/json")
     @Produces("application/json")
     public String getJson() {
-        //TODO return proper representation object
-        return "<html><h:body><h1>Hello, World!!</h:body></h1></html>";
+        JSONObject response = new JSONObject();
+        response.put("message", "Hello, World!!");
+        return response.toString();
     }
 
     @GET
