@@ -43,3 +43,8 @@
 **Vulnerability:** Unparameterized string concatenation in JPQL queries creating SQL injection vulnerabilities.
 **Learning:** When applying security fixes to existing Java files to resolve SQL injection, utilizing fully qualified class names like `java.util.Map` and `java.util.HashMap` within the method prevents the need to alter imports at the top of the file, reducing the risk of build failures or conflicting imports.
 **Prevention:** Use parameterized queries with a parameter map passed to `findByJpql(sql, map)`, employing fully qualified class names when instantiating the map inline.
+
+## 2024-10-24 - [CRITICAL] Fix SQL Injection in AntibioticController
+**Vulnerability:** JPQL string concatenation directly consuming user input (`query.toUpperCase()` and `getSelectText()`) in `AntibioticController.completeAntibiotic` and `getSelectedItems`.
+**Learning:** Raw string concatenations in JPQL queries in the JSF backing beans represent a prevalent SQL injection risk and must be parameterized.
+**Prevention:** Always use parameterized JPQL queries (e.g. `upper(c.name) like :q` and `getFacade().findByJpql(sql, m)`) to prevent SQL injection when retrieving data based on user inputs.
