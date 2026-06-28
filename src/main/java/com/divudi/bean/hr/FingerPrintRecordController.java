@@ -147,14 +147,18 @@ public class FingerPrintRecordController implements Serializable {
     }
 
     public List<FingerPrintRecord> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from FingerPrintRecord c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> parameters = new java.util.HashMap<>();
+        parameters.put("query", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from FingerPrintRecord c where c.retired=false and upper(c.name) like :query order by c.name", parameters);
         return selectedItems;
     }
 
     public List<FingerPrintRecord> completeFingerPrintRecord(String qry) {
         List<FingerPrintRecord> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from FingerPrintRecord c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            java.util.Map<String, Object> parameters = new java.util.HashMap<>();
+            parameters.put("query", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql("select c from FingerPrintRecord c where c.retired=false and upper(c.name) like :query order by c.name", parameters);
         }
         if (a == null) {
             a = new ArrayList<>();
