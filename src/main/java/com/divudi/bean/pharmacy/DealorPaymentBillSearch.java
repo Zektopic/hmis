@@ -630,7 +630,8 @@ public class DealorPaymentBillSearch implements Serializable {
             if (txtSearch == null || txtSearch.trim().isEmpty()) {
                 sql = "SELECT b FROM BilledBill b WHERE b.retired=false and b.billType=:type and b.createdAt between :fromDate and :toDate order by b.id";
             } else {
-                sql = "select b from BilledBill b where b.retired=false and b.billType=:type and b.createdAt between :fromDate and :toDate and ((b.staff.person.name) like '%" + txtSearch.toUpperCase() + "%'  or (b.staff.person.phone) like '%" + txtSearch.toUpperCase() + "%'  or (b.insId) like '%" + txtSearch.toUpperCase() + "%') order by b.id desc  ";
+                sql = "select b from BilledBill b where b.retired=false and b.billType=:type and b.createdAt between :fromDate and :toDate and (upper(b.staff.person.name) like :q  or upper(b.staff.person.phone) like :q  or upper(b.insId) like :q) order by b.id desc  ";
+                temMap.put("q", "%" + txtSearch.trim().toUpperCase() + "%");
             }
 
             temMap.put("toDate", getToDate());

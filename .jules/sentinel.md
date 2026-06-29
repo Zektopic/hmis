@@ -43,3 +43,8 @@
 **Vulnerability:** Unparameterized string concatenation in JPQL queries creating SQL injection vulnerabilities.
 **Learning:** When applying security fixes to existing Java files to resolve SQL injection, utilizing fully qualified class names like `java.util.Map` and `java.util.HashMap` within the method prevents the need to alter imports at the top of the file, reducing the risk of build failures or conflicting imports.
 **Prevention:** Use parameterized queries with a parameter map passed to `findByJpql(sql, map)`, employing fully qualified class names when instantiating the map inline.
+
+## 2026-06-21 - JPQL Injection via String Concatenation in PharmacyBillSearch and DealorPaymentBillSearch
+**Vulnerability:** Found a critical JPQL injection point in `PharmacyBillSearch.java` and `DealorPaymentBillSearch.java` where user input `txtSearch.toUpperCase()` was directly concatenated into a LIKE clause within a dynamic query.
+**Learning:** The use of `toUpperCase()` in controller code combined with string concatenation is a recurring pattern used to bypass database-level case-sensitivity without utilizing parameterized queries. This bypasses security checks and allows arbitrary SQL execution.
+**Prevention:** Use the JPQL `upper()` function within the query itself combined with parameterized binding via `temMap.put("q", "%" + txtSearch.trim().toUpperCase() + "%")` to ensure both case-insensitivity and secure input handling.
