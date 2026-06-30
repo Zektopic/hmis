@@ -43,3 +43,7 @@
 **Vulnerability:** Unparameterized string concatenation in JPQL queries creating SQL injection vulnerabilities.
 **Learning:** When applying security fixes to existing Java files to resolve SQL injection, utilizing fully qualified class names like `java.util.Map` and `java.util.HashMap` within the method prevents the need to alter imports at the top of the file, reducing the risk of build failures or conflicting imports.
 **Prevention:** Use parameterized queries with a parameter map passed to `findByJpql(sql, map)`, employing fully qualified class names when instantiating the map inline.
+## 2025-05-24 - [Fix SQL Injection in AmpController]
+**Vulnerability:** JPQL Injection in `AmpController.java` (`getSelectedItems`) due to manual string concatenation of user input (`getSelectText()`) combined with string manipulation (`toUpperCase()`) inside the query.
+**Learning:** Manual case-insensitive matching attempts (like `.toUpperCase()`) in JPQL strings are a frequent anti-pattern that leads to SQL injection. Developers often concatenate raw strings instead of using `upper(c.field) like :query`.
+**Prevention:** Always use parameterized JPQL queries with a `Map<String, Object>`. For case-insensitive `LIKE` searches, use JPQL's `upper()` or `lower()` function directly in the query string and format the parameter value accordingly (e.g., `%VALUE%`).
