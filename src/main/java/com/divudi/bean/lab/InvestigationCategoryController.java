@@ -71,7 +71,10 @@ public class InvestigationCategoryController implements Serializable {
 
 
     public List<InvestigationCategory> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from InvestigationCategory c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String jpql = "select c from InvestigationCategory c where c.retired=false and upper(c.name) like :name order by c.name";
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("name", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(jpql, m);
         return selectedItems;
     }
 
