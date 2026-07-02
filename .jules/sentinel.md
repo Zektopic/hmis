@@ -43,3 +43,7 @@
 **Vulnerability:** Unparameterized string concatenation in JPQL queries creating SQL injection vulnerabilities.
 **Learning:** When applying security fixes to existing Java files to resolve SQL injection, utilizing fully qualified class names like `java.util.Map` and `java.util.HashMap` within the method prevents the need to alter imports at the top of the file, reducing the risk of build failures or conflicting imports.
 **Prevention:** Use parameterized queries with a parameter map passed to `findByJpql(sql, map)`, employing fully qualified class names when instantiating the map inline.
+## 2026-07-02 - SQL Injection via String Concatenation in JPQL LIKE clauses
+**Vulnerability:** JPQL injection point found in `InvestigationController.java` where user search terms were directly concatenated into `LIKE` clauses (e.g. `(c.name) like '%" + query.toUpperCase() + "%'`).
+**Learning:** The pattern of directly building JPQL strings is prevalent in the JSF backing beans for search boxes and autocomplete features. This bypasses JPA parameterization and opens up SQL injection.
+**Prevention:** Convert string concatenations to use parameterized queries (`:q`) and use a `Map<String, Object>` to pass `"%" + query.toUpperCase() + "%"` via the facade's `findByJpql(sql, params)` method.
