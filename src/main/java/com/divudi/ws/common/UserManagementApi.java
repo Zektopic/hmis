@@ -475,23 +475,44 @@ public class UserManagementApi {
             DepartmentAssignmentRequestDTO req = gson.fromJson(body, DepartmentAssignmentRequestDTO.class);
             if (req == null || req.getDepartmentIds() == null || req.getDepartmentIds().isEmpty()) return errorResponse("departmentIds are required", 400);
             List<Long> invalidDepartmentIds = new ArrayList<>();
-            for (Long did : req.getDepartmentIds()) {
-                Department d = departmentFacade.find(did);
+            List<Long> reqDids = req.getDepartmentIds();
+
+            Map<String, Object> deptParams = new HashMap<>();
+            deptParams.put("ids", reqDids);
+            List<Department> departments = departmentFacade.findByJpql("select d from Department d where d.id in :ids", deptParams);
+            Map<Long, Department> deptMap = new HashMap<>();
+            for (Department d : departments) {
+                deptMap.put(d.getId(), d);
+            }
+
+            Map<String, Object> udParams = new HashMap<>();
+            udParams.put("u", u);
+            udParams.put("dids", reqDids);
+            List<WebUserDepartment> existing = webUserDepartmentFacade.findByJpql(
+                    "select ud from WebUserDepartment ud where ud.retired=false and ud.webUser=:u and ud.department.id in :dids", udParams);
+            Set<Long> existingDeptIds = new HashSet<>();
+            for (WebUserDepartment ud : existing) {
+                if (ud.getDepartment() != null) {
+                    existingDeptIds.add(ud.getDepartment().getId());
+                }
+            }
+
+            for (Long did : reqDids) {
+                Department d = deptMap.get(did);
                 if (d == null) {
                     invalidDepartmentIds.add(did);
                     continue;
                 }
-                Map<String, Object> m = new HashMap<>();
-                m.put("u", u);
-                m.put("d", d);
-                List<WebUserDepartment> ex = webUserDepartmentFacade.findByJpql("select ud from WebUserDepartment ud where ud.retired=false and ud.webUser=:u and ud.department=:d", m);
-                if (!ex.isEmpty()) continue;
+                if (existingDeptIds.contains(did)) {
+                    continue;
+                }
                 WebUserDepartment ud = new WebUserDepartment();
                 ud.setWebUser(u);
                 ud.setDepartment(d);
                 ud.setCreater(apiUser);
                 ud.setCreatedAt(new Date());
                 webUserDepartmentFacade.create(ud);
+                existingDeptIds.add(did);
             }
             if (!invalidDepartmentIds.isEmpty()) {
                 return errorResponse("Invalid departmentIds: " + invalidDepartmentIds, 400);
