@@ -10505,7 +10505,7 @@ public class PharmacyController implements Serializable {
         // Query for actual GRNs that are created but not yet approved
         // PHARMACY_GRN_PRE: Saved but not finalized
         // PHARMACY_GRN: Finalized but awaiting approval (when manage costing is true)
-        // PERFORMANCE FIX: Simplified WHERE conditions and added limit
+        // PERFORMANCE: Simplified WHERE conditions and added limit
         String jpql = "SELECT bi FROM BillItem bi "
                 + "WHERE bi.bill.retired = false "
                 + "AND bi.retired = false "
