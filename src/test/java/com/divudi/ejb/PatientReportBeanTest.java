@@ -58,6 +58,23 @@ public class PatientReportBeanTest {
         }
     }
 
+    private static class MockPatientReportFacade extends com.divudi.core.facade.PatientReportFacade {
+        public PatientReport mockReport;
+        public int createCount = 0;
+        public PatientReport lastCreatedReport = null;
+
+        @Override
+        public PatientReport findFirstByJpql(String jpql) {
+            return mockReport;
+        }
+
+        @Override
+        public void create(PatientReport entity) {
+            createCount++;
+            lastCreatedReport = entity;
+        }
+    }
+
     private static class TestInvestigation extends Investigation {
         private List<InvestigationItem> customReportItems = new ArrayList<>();
 
@@ -69,6 +86,67 @@ public class PatientReportBeanTest {
         public void setCustomReportItems(List<InvestigationItem> reportItems) {
             this.customReportItems = reportItems;
         }
+    }
+
+    @Test
+    public void testPatientReportFromPatientIx_nullInput() {
+        PatientReportBean bean = new PatientReportBean();
+        assertNull(bean.patientReportFromPatientIx(null));
+    }
+
+    @Test
+    public void testPatientReportFromPatientIx_nullId() {
+        PatientReportBean bean = new PatientReportBean();
+        PatientInvestigation pi = new PatientInvestigation();
+        pi.setId(null);
+        assertNull(bean.patientReportFromPatientIx(pi));
+    }
+
+    @Test
+    public void testPatientReportFromPatientIx_zeroId() {
+        PatientReportBean bean = new PatientReportBean();
+        PatientInvestigation pi = new PatientInvestigation();
+        pi.setId(0L);
+        assertNull(bean.patientReportFromPatientIx(pi));
+    }
+
+    @Test
+    public void testPatientReportFromPatientIx_existingReport() {
+        PatientReportBean bean = new PatientReportBean();
+        MockPatientReportFacade facade = new MockPatientReportFacade();
+        bean.setPrFacade(facade);
+
+        PatientReport mockReport = new PatientReport();
+        facade.mockReport = mockReport;
+
+        PatientInvestigation pi = new PatientInvestigation();
+        pi.setId(1L);
+
+        PatientReport result = bean.patientReportFromPatientIx(pi);
+        assertEquals(mockReport, result);
+        assertEquals(0, facade.createCount);
+    }
+
+    @Test
+    public void testPatientReportFromPatientIx_createNewReport() {
+        PatientReportBean bean = new PatientReportBean();
+        MockPatientReportFacade facade = new MockPatientReportFacade();
+        bean.setPrFacade(facade);
+        facade.mockReport = null;
+
+        PatientInvestigation pi = new PatientInvestigation();
+        pi.setId(1L);
+        Investigation ix = new Investigation();
+        pi.setInvestigation(ix);
+
+        PatientReport result = bean.patientReportFromPatientIx(pi);
+
+        assertNotNull(result);
+        assertEquals(1, facade.createCount);
+        assertEquals(facade.lastCreatedReport, result);
+        assertEquals(ix, result.getItem());
+        assertEquals(pi, result.getPatientInvestigation());
+        assertNotNull(result.getCreatedAt());
     }
 
     @Test
