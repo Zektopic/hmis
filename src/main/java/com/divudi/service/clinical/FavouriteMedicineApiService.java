@@ -675,9 +675,44 @@ public class FavouriteMedicineApiService implements Serializable {
      * Create a new measurement unit
      */
     public MeasurementUnit createMeasurementUnit(WebUser user, String name, String code, String unitType) {
-        // TODO: Implement measurement unit creation
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Measurement unit name is required");
+        }
 
-        throw new UnsupportedOperationException("Not implemented yet");
+        MeasurementUnit unit = new MeasurementUnit();
+        unit.setName(name.trim());
+        unit.setCreatedAt(new Date());
+        unit.setCreater(user);
+
+        if (code != null && !code.trim().isEmpty()) {
+            unit.setCode(code.trim());
+        } else {
+            // Generate code from name if not provided
+            unit.setCode(name.trim().toUpperCase().replaceAll("\\s+", "_"));
+        }
+
+        if (unitType != null) {
+            switch (unitType) {
+                case "DoseUnit":
+                    unit.setStrengthUnit(true);
+                    break;
+                case "FrequencyUnit":
+                    unit.setFrequencyUnit(true);
+                    break;
+                case "DurationUnit":
+                    unit.setDurationUnit(true);
+                    break;
+                case "IssueUnit":
+                    unit.setIssueUnit(true);
+                    break;
+                case "PackUnit":
+                    unit.setPackUnit(true);
+                    break;
+            }
+        }
+
+        measurementUnitFacade.create(unit);
+        return unit;
     }
 
     // =================== CATEGORY OPERATIONS ===================
