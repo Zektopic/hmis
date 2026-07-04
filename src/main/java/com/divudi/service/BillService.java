@@ -4074,9 +4074,29 @@ public class BillService {
 
         if (jsonObject.has("billItems")) {
             List<Map<String, Object>> billItemsList = gson.fromJson(jsonObject.get("billItems"), List.class);
+
+            List<Long> itemIds = new java.util.ArrayList<>();
+            for (Map<String, Object> itemMap : billItemsList) {
+                if (itemMap.get("item_id") != null) {
+                    itemIds.add(((Number) itemMap.get("item_id")).longValue());
+                }
+            }
+
+            java.util.Map<Long, Item> itemMapById = new java.util.HashMap<>();
+            if (!itemIds.isEmpty()) {
+                String jpql = "SELECT i FROM Item i WHERE i.id IN :ids";
+                java.util.Map<String, Object> params = new java.util.HashMap<>();
+                params.put("ids", itemIds);
+                List<Item> items = itemFacade.findByJpql(jpql, params);
+                for (Item item : items) {
+                    itemMapById.put(item.getId(), item);
+                }
+            }
+
             for (Map<String, Object> itemMap : billItemsList) {
                 BillItem billItem = new BillItem();
-                Item item = itemFacade.find(((Number) itemMap.get("item_id")).longValue());
+                Long itemId = ((Number) itemMap.get("item_id")).longValue();
+                Item item = itemMapById.get(itemId);
 
                 billItem.setItem(item);
 
