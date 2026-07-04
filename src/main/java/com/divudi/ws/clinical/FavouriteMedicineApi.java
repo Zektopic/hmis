@@ -332,10 +332,33 @@ public class FavouriteMedicineApi {
             if (user == null) {
                 return errorResponse("Not a valid key", 401);
             }
+            // Get query parameters
+            String query = uriInfo.getQueryParameters().getFirst("query");
+            String limitStr = uriInfo.getQueryParameters().getFirst("limit");
 
-            // TODO: Implement in service layer
-            return errorResponse("Not implemented yet", 501);
+            if (query == null || query.trim().isEmpty()) {
+                return errorResponse("Query parameter is required", 400);
+            }
 
+            Integer limit = null;
+            if (limitStr != null && !limitStr.trim().isEmpty()) {
+                try {
+                    limit = Integer.parseInt(limitStr.trim());
+                } catch (NumberFormatException e) {
+                    return errorResponse("Invalid limit format", 400);
+                }
+            }
+
+            // Search ATMs
+            List<Item> atms = favouriteMedicineService.searchAtms(query.trim(), limit);
+
+            // Convert to DTOs
+            List<Map<String, Object>> responseData = new ArrayList<>();
+            for (Item atm : atms) {
+                responseData.add(convertItemToMap(atm));
+            }
+
+            return successResponse(responseData);
         } catch (Exception e) {
             return errorResponse("An error occurred: " + e.getMessage(), 500);
         }
