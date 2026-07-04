@@ -160,29 +160,47 @@ public class UserRoleApi {
             RolePrivilegeAssignmentRequestDTO req = gson.fromJson(body, RolePrivilegeAssignmentRequestDTO.class);
             if (req == null || req.getPrivileges() == null || req.getPrivileges().isEmpty()) return errorResponse("privileges are required", 400);
             Department d = req.getDepartmentId() != null ? departmentFacade.find(req.getDepartmentId()) : null;
+            Set<Privileges> requestedPrivileges = new HashSet<>();
             for (String pName : req.getPrivileges()) {
-                Privileges p;
                 try {
-                    p = Privileges.valueOf(pName);
+                    requestedPrivileges.add(Privileges.valueOf(pName));
                 } catch (IllegalArgumentException e) {
                     return errorResponse("Invalid privilege: " + pName, 400);
                 }
-                Map<String, Object> m = new HashMap<>();
-                m.put("r", r);
-                m.put("p", p);
-                m.put("d", d);
-                List<WebUserRolePrivilege> ex = rolePrivilegeFacade.findByJpql(
-                        "select rp from WebUserRolePrivilege rp where rp.retired=false and rp.webUserRole=:r and rp.privilege=:p and ((:d is null and rp.department is null) or rp.department=:d)",
-                        m);
-                if (!ex.isEmpty()) continue;
-                WebUserRolePrivilege rp = new WebUserRolePrivilege();
-                rp.setWebUserRole(r);
-                rp.setPrivilege(p);
-                rp.setDepartment(d);
-                rp.setCreater(apiUser);
-                rp.setCreatedAt(new Date());
-                rolePrivilegeFacade.create(rp);
             }
+
+            Map<String, Object> m = new HashMap<>();
+            m.put("r", r);
+            m.put("d", d);
+            m.put("privileges", requestedPrivileges);
+            List<WebUserRolePrivilege> existingList = rolePrivilegeFacade.findByJpql(
+                    "select rp from WebUserRolePrivilege rp where rp.retired=false and rp.webUserRole=:r and rp.privilege in :privileges and ((:d is null and rp.department is null) or rp.department=:d)",
+                    m);
+
+            Set<Privileges> existingPrivileges = new HashSet<>();
+            for (WebUserRolePrivilege rp : existingList) {
+                existingPrivileges.add(rp.getPrivilege());
+            }
+
+            List<WebUserRolePrivilege> toCreate = new ArrayList<>();
+            for (Privileges p : requestedPrivileges) {
+                if (!existingPrivileges.contains(p)) {
+                    WebUserRolePrivilege rp = new WebUserRolePrivilege();
+                    rp.setWebUserRole(r);
+                    rp.setPrivilege(p);
+                    rp.setDepartment(d);
+                    rp.setCreater(apiUser);
+                    rp.setCreatedAt(new Date());
+                    toCreate.add(rp);
+                }
+            }
+
+            if (!toCreate.isEmpty()) {
+                for (WebUserRolePrivilege rp : toCreate) {
+                    rolePrivilegeFacade.create(rp);
+                }
+            }
+
             return listRolePrivileges(id);
         } catch (Exception e) {
             return errorResponse("Internal server error", 500);
