@@ -2229,7 +2229,7 @@ public class PharmacyStockTakeController implements Serializable {
 
         System.out.println("DEBUG: Bill.id = " + b.getId());
 
-        // CRITICAL FIX: Do NOT access b.getBillItems() at all - it triggers lazy loading!
+        // CRITICAL: Do NOT access b.getBillItems() at all - it triggers lazy loading!
         // For lightweight loading, BillItems will be loaded lazily when needed for upload processing
         String billItemsStatus = enableLightweightBillLoading ? "LAZY_NOT_LOADED (lightweight mode)" : "UNKNOWN";
         System.out.println("DEBUG: Bill.billItems = " + billItemsStatus);
