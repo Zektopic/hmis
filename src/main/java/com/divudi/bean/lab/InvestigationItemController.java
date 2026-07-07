@@ -843,7 +843,10 @@ public class InvestigationItemController implements Serializable {
     }
 
     public List<InvestigationItem> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from InvestigationItem c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String jpql = "select c from InvestigationItem c where c.retired=false and upper(c.name) like :q order by c.name";
+        Map<String, Object> m = new HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(jpql, m);
         if (selectedItems == null) {
             selectedItems = new ArrayList<>();
         }

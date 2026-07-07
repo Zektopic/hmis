@@ -47,3 +47,8 @@
 **Vulnerability:** Found a SQL injection vulnerability in `ClinicController.java` (`completeStaff` method) where user input (`query`) and property properties (`speciality.id`) were directly concatenated into JPQL strings, putting the application at risk of critical SQL injection.
 **Learning:** JPQL string concatenation is prevalent across multiple controller files. When fixing `like '%" + value + "%'` patterns, remember to also parameterize adjacent fields like IDs (e.g. `speciality.id = ` + getSpeciality().getId()) in the same query string. Using fully qualified names (e.g., `java.util.Map`) for injected data types helps avoid potential compilation issues due to missing imports. Also when converting `query.toUpperCase()` inside a LIKE clause to parameterized queries, use the JPQL `upper()` function around the entity attribute (e.g. `upper(p.person.name) like :q`) to preserve the case-insensitive search logic.
 **Prevention:** Always use parameterized JPQL queries with a `Map<String, Object>` rather than string concatenation when passing user inputs or variables into queries.
+
+## 2026-07-07 - [InvestigationItemController JPQL Injection Fix]
+**Vulnerability:** JPQL injection due to unparameterized string concatenation with user input in the `getSelectedItems()` query for `InvestigationItemController`.
+**Learning:** Found widespread unparameterized queries utilizing `like '%" + value + "%'` across the codebase, particularly in controllers, exposing the app to SQL injection risk. Fixes must handle case sensitivity in a database-agnostic way (e.g., using `upper(c.name) like :q`).
+**Prevention:** Always use parameterized queries for dynamic input within JPQL and map parameters via the injected `Map`.
