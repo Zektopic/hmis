@@ -84,6 +84,10 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
     private InpatientDirectIssueNativeSqlService nativeSqlService;
     @EJB
     private PriceMatrixNativeSqlService priceMatrixNativeSqlService;
+    @EJB
+    private com.divudi.core.facade.BillItemFacade billItemFacade;
+    @EJB
+    private com.divudi.core.facade.InpatientPackageItemFacade inpatientPackageItemFacade;
 
     // ---- Working state ----
     private PatientEncounter patientEncounter;
@@ -99,6 +103,7 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
     private boolean billPreview = false;
     private String errorMessage = "";
     private double marginTotal = 0.0;
+    private Bill sourceItemRequest;
 
     @PostConstruct
     public void init() {
@@ -278,12 +283,70 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
         b.setNetTotal(0.0);
         b.setGrantTotal(0.0);
 
+        if (sourceItemRequest != null) {
+            b.setReferenceBill(sourceItemRequest);
+        }
+
         return b;
     }
 
     // -----------------------------------------------------------------------
     // Add item
     // -----------------------------------------------------------------------
+
+    /**
+     * Self-contained package-allocation check for the direct-issue flow
+     * (Task 16d) — mirrors the allocation lookup + persisted consumption +
+     * in-session consumption pattern used by the other two pharmacy issue
+     * paths (Task 16b/16c's resolvePackageOverrideRate), but duplicated here
+     * since this controller never receives a request-linked BillItem with
+     * useful override state to reuse.
+     */
+    private com.divudi.core.entity.inward.InpatientPackageItem resolvePackageAllocation(Long itemId, double requestedQty) {
+        if (patientEncounter == null || patientEncounter.getInpatientPackage() == null || itemId == null) {
+            return null;
+        }
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("pkg", patientEncounter.getInpatientPackage());
+        m.put("itemId", itemId);
+        m.put("type", com.divudi.core.data.inward.InpatientPackageComponentType.PHARMACY_ITEM);
+        java.util.List<com.divudi.core.entity.inward.InpatientPackageItem> matches = inpatientPackageItemFacade.findByJpql(
+                "SELECT i FROM InpatientPackageItem i"
+                        + " WHERE i.retired = false"
+                        + " AND i.inpatientPackage = :pkg"
+                        + " AND i.item.id = :itemId"
+                        + " AND i.componentType = :type",
+                m);
+        if (matches.isEmpty()) {
+            return null;
+        }
+        com.divudi.core.entity.inward.InpatientPackageItem packageItem = matches.get(0);
+
+        java.util.Map<String, Object> qm = new java.util.HashMap<>();
+        qm.put("pe", patientEncounter);
+        qm.put("itemId", itemId);
+        Double alreadyIssued = billItemFacade.findDoubleByJpql(
+                "SELECT SUM(bi.qty) FROM BillItem bi"
+                        + " WHERE bi.retired = false"
+                        + " AND bi.fromPackage = true"
+                        + " AND bi.patientEncounter = :pe"
+                        + " AND bi.item.id = :itemId",
+                qm);
+        double consumed = alreadyIssued != null ? alreadyIssued : 0.0;
+
+        if (billItemDataList != null) {
+            for (BillItemData existing : billItemDataList) {
+                if (existing.isFromPackage() && itemId.equals(existing.getItemId())) {
+                    consumed += existing.getQty();
+                }
+            }
+        }
+
+        if (consumed + requestedQty > packageItem.getQty()) {
+            return null;
+        }
+        return packageItem;
+    }
 
     public void addBillItem() {
         if (patientEncounter == null) {
@@ -362,32 +425,37 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
         bid.setCatId(null);
 
         // Rate / value for bill line — apply inward price matrix margin and discount
-        double lineRetailRate = selectedStockDto.getRetailRate() != null ? selectedStockDto.getRetailRate() : 0.0;
+        com.divudi.core.entity.inward.InpatientPackageItem packageAllocation = resolvePackageAllocation(selectedStockDto.getItemId(), qty);
+        boolean isPackageRate = packageAllocation != null;
+        double packageRate = isPackageRate ? packageAllocation.getFixedPrice() / packageAllocation.getQty() : 0.0;
+        double lineRetailRate = isPackageRate ? packageRate : (selectedStockDto.getRetailRate() != null ? selectedStockDto.getRetailRate() : 0.0);
         double absQty = Math.abs(qty);
         double grossValue = lineRetailRate * absQty;
         double marginRate = 0.0;
         double marginValue = 0.0;
         double discountPct = 0.0;
         double discountValue = 0.0;
-        try {
-            long itemId = selectedStockDto.getItemId();
-            Department matrixDept = determineMatrixDepartment();
-            if (matrixDept == null) matrixDept = sessionController.getDepartment();
-            long matrixDeptId = matrixDept.getId();
-            double marginPct = priceMatrixNativeSqlService.getInwardMarginPct(itemId, matrixDeptId, grossValue);
-            if (marginPct != 0.0) {
-                marginRate = (marginPct / 100.0) * lineRetailRate;
-                marginValue = marginRate * absQty;
+        if (!isPackageRate) {
+            try {
+                long itemId = selectedStockDto.getItemId();
+                Department matrixDept = determineMatrixDepartment();
+                if (matrixDept == null) matrixDept = sessionController.getDepartment();
+                long matrixDeptId = matrixDept.getId();
+                double marginPct = priceMatrixNativeSqlService.getInwardMarginPct(itemId, matrixDeptId, grossValue);
+                if (marginPct != 0.0) {
+                    marginRate = (marginPct / 100.0) * lineRetailRate;
+                    marginValue = marginRate * absQty;
+                }
+                if (priceMatrixNativeSqlService.isDiscountAllowed(itemId)) {
+                    Long schemeId = patientEncounter.getPaymentScheme() != null ? patientEncounter.getPaymentScheme().getId() : null;
+                    Long admTypeId = patientEncounter.getAdmissionType() != null ? patientEncounter.getAdmissionType().getId() : null;
+                    String pmName = patientEncounter.getPaymentMethod() != null ? patientEncounter.getPaymentMethod().name() : null;
+                    discountPct = priceMatrixNativeSqlService.getInwardDiscountPct(itemId, pmName, schemeId, admTypeId, matrixDeptId);
+                    discountValue = (discountPct / 100.0) * grossValue;
+                }
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "[addBillItem] margin/discount lookup failed, using retail rate only", e);
             }
-            if (priceMatrixNativeSqlService.isDiscountAllowed(itemId)) {
-                Long schemeId = patientEncounter.getPaymentScheme() != null ? patientEncounter.getPaymentScheme().getId() : null;
-                Long admTypeId = patientEncounter.getAdmissionType() != null ? patientEncounter.getAdmissionType().getId() : null;
-                String pmName = patientEncounter.getPaymentMethod() != null ? patientEncounter.getPaymentMethod().name() : null;
-                discountPct = priceMatrixNativeSqlService.getInwardDiscountPct(itemId, pmName, schemeId, admTypeId, matrixDeptId);
-                discountValue = (discountPct / 100.0) * grossValue;
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "[addBillItem] margin/discount lookup failed, using retail rate only", e);
         }
         double netRate = lineRetailRate + marginRate - (absQty > 0 ? discountValue / absQty : 0.0);
         double netValue = grossValue + marginValue - discountValue;
@@ -398,6 +466,11 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
         bid.setMarginValue(marginValue);
         bid.setNetValue(-netValue);
         bid.setGrossValue(-grossValue);
+        bid.setFromPackage(isPackageRate);
+        if (isPackageRate) {
+            bid.setOverriddenRate(packageRate);
+            bid.setSourcePackageItemId(packageAllocation.getId());
+        }
 
         if (billItemDataList == null) {
             billItemDataList = new ArrayList<>();
@@ -515,6 +588,72 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
         return lastAutocompleteResults != null ? lastAutocompleteResults : new ArrayList<>();
     }
 
+    /**
+     * FIFO earliest-expiry stock lookup by item id, for pre-loading suggested
+     * quantities from an Item/Service Request line (issue #21793 redesign) —
+     * unlike completeAvailableStockOptimizedDto(), this looks up by exact item
+     * id rather than a name search.
+     */
+    public StockDTO findEarliestExpiryStockForItem(Long itemId, double qty) {
+        if (itemId == null) {
+            return null;
+        }
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("department", sessionController.getLoggedUser().getDepartment());
+        parameters.put("itemId", itemId);
+        parameters.put("stockMin", qty);
+
+        parameters.put("today", new Date());
+
+        String sql = "SELECT NEW com.divudi.core.data.dto.StockDTO("
+                + "i.id, i.itemBatch.id, i.itemBatch.item.id, i.itemBatch.item.name, i.itemBatch.item.code, "
+                + "i.itemBatch.item.name, i.itemBatch.retailsaleRate, i.stock, i.itemBatch.dateOfExpire) "
+                + "FROM Stock i "
+                + "WHERE i.stock >= :stockMin "
+                + "AND i.department = :department "
+                + "AND i.itemBatch.item.id = :itemId "
+                + "AND (i.itemBatch.dateOfExpire IS NULL OR i.itemBatch.dateOfExpire >= :today) "
+                + "ORDER BY i.itemBatch.dateOfExpire";
+
+        @SuppressWarnings("unchecked")
+        List<StockDTO> results = (List<StockDTO>) stockFacade.findLightsByJpql(sql, parameters, TemporalType.TIMESTAMP, 1);
+        return results != null && !results.isEmpty() ? results.get(0) : null;
+    }
+
+    /**
+     * Entry point from the Item/Service Request pending queue (issue #21793
+     * redesign): seeds this controller's cart with a suggested stock batch per
+     * remaining inventory line, then hands control to the normal Direct Issue
+     * page — the user reviews/edits and clicks the page's own Settle button.
+     * Lines with no available stock are skipped (left remaining, reported back
+     * to the queue) rather than blocking the whole navigation.
+     */
+    public String navigateToDirectIssueFromItemRequest(Bill itemRequest, List<BillItem> remainingLines) {
+        resetAll();
+        setPatientEncounter(itemRequest.getPatientEncounter());
+        this.sourceItemRequest = itemRequest;
+        for (BillItem requestLine : remainingLines) {
+            if (requestLine.getQty() == null) {
+                continue;
+            }
+            StockDTO stockDto = findEarliestExpiryStockForItem(
+                    requestLine.getItem() != null ? requestLine.getItem().getId() : null,
+                    requestLine.getQty());
+            if (stockDto == null) {
+                continue;
+            }
+            selectedStockDto = stockDto;
+            selectedStockId = stockDto.getId();
+            qty = requestLine.getQty();
+            int sizeBefore = billItemDataList != null ? billItemDataList.size() : 0;
+            addBillItem();
+            if (billItemDataList != null && billItemDataList.size() > sizeBefore) {
+                billItemDataList.get(billItemDataList.size() - 1).setSourceRequestBillItemId(requestLine.getId());
+            }
+        }
+        return "/inward/pharmacy_bill_issue_bht?faces-redirect=true";
+    }
+
     public void handleStockSelect(SelectEvent event) {
         try {
             StockDTO selectedDto = (StockDTO) event.getObject();
@@ -571,12 +710,14 @@ public class InpatientDirectIssueNativeSqlController implements Serializable {
         billPreview = false;
         errorMessage = "";
         marginTotal = 0.0;
+        sourceItemRequest = null;
     }
 
     private void clearBill() {
         preBill = null;
         billItemDataList = null;
         marginTotal = 0.0;
+        sourceItemRequest = null;
     }
 
     private void clearBillItem() {

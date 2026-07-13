@@ -1745,6 +1745,10 @@ public class SearchController implements Serializable {
         return "/reports/cashier_reports/shift_end_cash_list?faces-redirect=true";
     }
 
+    public String navigateToShiftStartAndEnd() {
+        return "/reports/cashier_reports/shift_start_and_ends?faces-redirect=true";
+    }
+
     public String navigatToReportDoctorPaymentOpd() {
         FacesContext context = FacesContext.getCurrentInstance();
         HttpServletRequest request = (HttpServletRequest) context.getExternalContext().getRequest();
@@ -2777,6 +2781,16 @@ public class SearchController implements Serializable {
         return opdSaleSummaryDtos.stream()
                 .filter(dto -> dto.getDiscountAmount() != null)
                 .mapToDouble(OpdSaleSummaryDTO::getDiscountAmount)
+                .sum();
+    }
+
+    public double getOpdSaleSummaryServiceChargeTotal() {
+        if (opdSaleSummaryDtos == null || opdSaleSummaryDtos.isEmpty()) {
+            return 0.0;
+        }
+        return opdSaleSummaryDtos.stream()
+                .filter(dto -> dto.getServiceCharge() != null)
+                .mapToDouble(OpdSaleSummaryDTO::getServiceCharge)
                 .sum();
     }
 
@@ -7398,6 +7412,11 @@ public class SearchController implements Serializable {
         createPoTable(billTypesToList, billTypesToAttachedToEachBillInTheList);
     }
 
+    private boolean isCrossDepartmentPoReceivingAllowed() {
+        return configOptionApplicationController
+                .getBooleanValueByKey("Pharmacy - Allow Cross-Department PO Receiving", false);
+    }
+
     /**
      * DTO-based version of createPoTablePharmacy for optimized performance.
      * Uses direct DTO query to avoid N+1 problem and entity graph loading. Does
@@ -7409,20 +7428,25 @@ public class SearchController implements Serializable {
         String jpql;
         Map<String, Object> params = new HashMap<>();
 
+        boolean allowCrossDepartmentPoReceiving = isCrossDepartmentPoReceivingAllowed();
+        String departmentClause = allowCrossDepartmentPoReceiving ? "" : "AND b.department = :dept ";
+
         // First, get count to verify data exists
         String countJpql = "SELECT COUNT(b) "
                 + "FROM Bill b "
                 + "WHERE b.retired = false "
                 + "AND b.billTypeAtomic = :bta "
                 + "AND b.referenceBill.institution = :ins "
-                + "AND b.department = :dept "
+                + departmentClause
                 + "AND b.createdAt BETWEEN :fromDate AND :toDate ";
 
         Map<String, Object> countParams = new HashMap<>();
         countParams.put("toDate", getToDate());
         countParams.put("fromDate", getFromDate());
         countParams.put("ins", getSessionController().getInstitution());
-        countParams.put("dept", sessionController.getDepartment());
+        if (!allowCrossDepartmentPoReceiving) {
+            countParams.put("dept", sessionController.getDepartment());
+        }
         countParams.put("bta", BillTypeAtomic.PHARMACY_ORDER_APPROVAL);
 
         logger.debug("createPoTablePharmacyDto: Count JPQL = {}", countJpql);
@@ -7440,7 +7464,7 @@ public class SearchController implements Serializable {
                 + "WHERE b.retired = false "
                 + "AND b.billTypeAtomic = :bta "
                 + "AND b.referenceBill.institution = :ins "
-                + "AND b.department = :dept "
+                + departmentClause
                 + "AND b.createdAt BETWEEN :fromDate AND :toDate ";
 
         List testResult = getBillFacade().findByJpql(testJpql, countParams, TemporalType.TIMESTAMP);
@@ -7474,7 +7498,7 @@ public class SearchController implements Serializable {
                 + "WHERE b.retired = false "
                 + "AND b.billTypeAtomic = :bta "
                 + "AND b.referenceBill.institution = :ins "
-                + "AND b.department = :dept "
+                + departmentClause
                 + "AND b.createdAt BETWEEN :fromDate AND :toDate ";
 
         logger.debug("createPoTablePharmacyDto: DTO JPQL = {}", jpql);
@@ -7514,7 +7538,9 @@ public class SearchController implements Serializable {
         params.put("toDate", getToDate());
         params.put("fromDate", getFromDate());
         params.put("ins", getSessionController().getInstitution());
-        params.put("dept", sessionController.getDepartment());
+        if (!allowCrossDepartmentPoReceiving) {
+            params.put("dept", sessionController.getDepartment());
+        }
         params.put("bta", BillTypeAtomic.PHARMACY_ORDER_APPROVAL);
 
         logger.info("createPoTablePharmacyDto: Executing DTO query...");
@@ -7599,11 +7625,13 @@ public class SearchController implements Serializable {
         String jpql;
         Map<String, Object> params = new HashMap<>();
 
+        boolean allowCrossDepartmentPoReceiving = isCrossDepartmentPoReceivingAllowed();
+
         jpql = "Select b From Bill b "
                 + " where b.retired = false"
                 + " and b.billTypeAtomic in :btas"
                 + " and b.referenceBill.institution = :ins "
-                + " and b.department = :dept "
+                + (allowCrossDepartmentPoReceiving ? "" : " and b.department = :dept ")
                 + " and b.createdAt between :fromDate and :toDate ";
 
         if (getSearchKeyword() != null) {
@@ -7639,7 +7667,9 @@ public class SearchController implements Serializable {
         params.put("toDate", getToDate());
         params.put("fromDate", getFromDate());
         params.put("ins", getSessionController().getInstitution());
-        params.put("dept", sessionController.getDepartment());
+        if (!allowCrossDepartmentPoReceiving) {
+            params.put("dept", sessionController.getDepartment());
+        }
         params.put("btas", billTypeAtomicToList);
 
         if (getReportKeyWord() != null && getReportKeyWord().isAdditionalDetails()) {
@@ -8122,6 +8152,7 @@ public class SearchController implements Serializable {
                 //Starting of newly added code
                 //                + " and b.bill.refunded=false "
                 //Ending of newly added code
+                + " and b.fee.feeType=:feeType"
                 + " and (b.feeValue - b.paidValue) > 0"
                 //                + " and  b.bill.billTime between :fromDate and :toDate ";
                 + " and  b.bill.createdAt between :fromDate and :toDate ";
@@ -8167,6 +8198,7 @@ public class SearchController implements Serializable {
         temMap.put("fromDate", getFromDate());
         temMap.put("btp", BillType.InwardBill);
         temMap.put("btp2", BillType.InwardProfessional);
+        temMap.put("feeType", FeeType.Staff);
 
         billFees = getBillFeeFacade().findByJpql(sql, temMap, TemporalType.TIMESTAMP, 50);
         List<BillFee> removeingBillFees = new ArrayList<>();
@@ -8199,6 +8231,7 @@ public class SearchController implements Serializable {
         temMap.put("billClass", BilledBill.class);
         temMap.put("btp", BillType.InwardBill);
         temMap.put("btp2", BillType.InwardProfessional);
+        temMap.put("feeType", FeeType.Staff);
 
         sql = "select b from BillFee b where "
                 + " b.retired=false "
@@ -8208,6 +8241,7 @@ public class SearchController implements Serializable {
                 //Starting of newly added code
                 //                + " and b.bill.refunded=false "
                 //Ending of newly added code
+                + " and b.fee.feeType=:feeType"
                 + " and (b.feeValue - b.paidValue) > 0"
                 //                + " and  b.bill.billTime between :fromDate and :toDate ";
                 + " and  b.bill.createdAt between :fromDate and :toDate ";
@@ -8278,6 +8312,7 @@ public class SearchController implements Serializable {
         sql = "select b from BillFee b where "
                 + " b.retired=false "
                 + " and (b.bill.billType=:btp or b.bill.billType=:btp2 )"
+                + " and b.fee.feeType=:feeType"
                 + " and (b.feeValue - b.paidValue) > 0"
                 + " and  b.bill.billDate between :fromDate and :toDate ";
 
@@ -8322,6 +8357,7 @@ public class SearchController implements Serializable {
         temMap.put("fromDate", getFromDate());
         temMap.put("btp", BillType.InwardBill);
         temMap.put("btp2", BillType.InwardProfessional);
+        temMap.put("feeType", FeeType.Staff);
 
         billFees = getBillFeeFacade().findByJpql(sql, temMap, TemporalType.TIMESTAMP);
         calTotal();
@@ -17184,7 +17220,10 @@ public class SearchController implements Serializable {
         btas.add(BillTypeAtomic.INWARD_SERVICE_BILL_REFUND);
         btas.add(BillTypeAtomic.INWARD_SERVICE_BILL_CANCELLATION_DURING_BATCH_BILL_CANCELLATION);
         btas.add(BillTypeAtomic.INWARD_SERVICE_BATCH_BILL_REFUND);
-        opdSaleSummaryDtos = billService.fetchOpdSaleSummaryDTOs(
+        // Issue #21920: one row per billing instance (not aggregated by item) with a
+        // billed date, so re-billed/cancelled/refunded services are preserved as
+        // separate rows instead of overwriting the same record.
+        opdSaleSummaryDtos = billService.fetchItemizedServiceInstanceDTOs(
                 fromDate, toDate, institution, site, department, category, item, btas);
     }
 
@@ -21839,6 +21878,10 @@ public class SearchController implements Serializable {
             //Start - Atomic Bill Type with Cash in and cash out added for 10088-all-cashier-summary-had-calculated-fund-bills
             List<BillTypeAtomic> btas = BillTypeAtomic.findByFinanceType(BillFinanceType.CASH_IN);
             btas.addAll(BillTypeAtomic.findByFinanceType(BillFinanceType.CASH_OUT));
+            // Collecting Centre Agent Payment / Cancellation are agent commission payouts, not cashier
+            // collections - exclude them (issue #21840)
+            btas.remove(BillTypeAtomic.CC_AGENT_PAYMENT);
+            btas.remove(BillTypeAtomic.CC_AGENT_PAYMENT_CANCELLATION);
             jpql += "AND bill.billTypeAtomic in :btas ";
             parameters.put("btas", btas);
             // End - Atomic Bill Type with Cash in and cash out added FOR 10088-all-cashier-summary-had-calculated-fund-bills
@@ -23987,6 +24030,29 @@ public class SearchController implements Serializable {
         return pdfSc;
     }
 
+    // PDF Export: Shift End Summary Report (shift_start_and_ends)
+    public StreamedContent getShiftEndSummaryReportAsPdf() {
+        if (bills == null || bills.isEmpty()) {
+            JsfUtil.addErrorMessage("Please generate the Shift End Summary report before exporting.");
+            return null;
+        }
+
+        StreamedContent pdfSc = null;
+        try {
+            String fileName = "Shift_End_Summary_Report";
+            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            if (dates != null && !dates.isEmpty()) {
+                fileName += "_" + dates;
+            }   
+            pdfSc = pdfController.createPdfForShiftEndSummary(bills, PageSize.A4.rotate(), true, getFiltersForShiftEndSummaryReport(), fileName);
+        } catch (IOException e) {
+            logger.error("getShiftEndSummaryReportAsPdf: Error creating pdfSc via pdfController.createPdfForShiftEndSummary", e);
+            pdfSc = null;
+            JsfUtil.addErrorMessage("Failed to generate Shift End Summary Report PDF file. Please try again.");
+        } 
+        return pdfSc;
+    }
+
     // Excel Export: wht Report
     public StreamedContent getWhtReportAsExcel() {
         if (bundle == null || bundle.getReportTemplateRows() == null || bundle.getReportTemplateRows().isEmpty()) {
@@ -24200,6 +24266,28 @@ public class SearchController implements Serializable {
         }
     }
 
+    // Excel Export: shift end summary Report (shift_start_and_ends)
+    public StreamedContent getShiftEndSummaryReportAsExcel() {
+        if (bills == null || bills.isEmpty()) {
+            JsfUtil.addErrorMessage("Please generate the Shift End Summary report before exporting.");
+            return null;
+        }
+
+        try {
+            String fileName = "Shift_End_Summary_Report";
+            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            if (dates != null && !dates.isEmpty()) {
+                fileName += "_" + dates;
+            }
+            downloadingExcel = excelController.createExcelForShiftEndSummary(bills, getFiltersForShiftEndSummaryReport(), fileName);
+        } catch (IOException e) {
+            logger.error("getShiftEndSummaryReportAsExcel: Error creating downloadingExcel via excelController.createExcelForShiftEndSummary", e);
+            downloadingExcel = null;
+            JsfUtil.addErrorMessage("Failed to generate Shift End Summary Report Excel file. Please try again.");
+        }
+        return downloadingExcel;
+    }
+
     // </editor-fold>
     // wht report, searchType as String
     public String getSearchTypeAsString() {
@@ -24255,6 +24343,23 @@ public class SearchController implements Serializable {
         params.put("MRN", (mrnNo != null && !mrnNo.isEmpty()) ? mrnNo : "All");
         params.put("Speciality", speciality != null ? speciality.getName() : "All");
         params.put("Doctor", staff != null && staff.getPerson() != null && staff.getPerson().getNameWithTitle() != null ? staff.getPerson().getNameWithTitle() : "All");
+
+        return params;
+    }
+
+    // Filters for Shift End Summary report
+    public Map<String, Object> getFiltersForShiftEndSummaryReport() {
+        Map<String, Object> params = new LinkedHashMap<>();
+        String dateTimeFormat = sessionController.getApplicationPreference().getLongDateTimeFormat();
+        String formattedFromDate = fromDate != null ? new SimpleDateFormat(dateTimeFormat).format(fromDate) : "Not available";
+        String formattedToDate = toDate != null ? new SimpleDateFormat(dateTimeFormat).format(toDate) : "Not available";
+
+        params.put("From Date", formattedFromDate);
+        params.put("To Date", formattedToDate);
+        params.put("User", (webUser != null && webUser.getWebUserPerson() != null) ? webUser.getWebUserPerson().getName() : "All");
+        params.put("Institution", institution != null ? institution.getName() : "All Institutions");
+        params.put("Site", site != null ? site.getName() : "All Sites");
+        params.put("Department", department != null ? department.getName() : "All Departments");
 
         return params;
     }
