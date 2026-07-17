@@ -87,3 +87,8 @@
 **Vulnerability:** Found critical JPQL injection in `InvestigationItemController.java` and `InvestigationItemDynamicLabelController.java` where user input was directly concatenated into `LIKE` clauses.
 **Learning:** Similar to past findings, the application's search functionality inside JSF controllers frequently builds JPQL dynamically using string concatenation, completely bypassing query parameterization and exposing the system to injection attacks. The use of `upper(c.name)` helps preserve case-insensitive search logic when migrating to parameterized queries.
 **Prevention:** Always use parameterized queries (e.g. `where upper(c.name) like :q`) with a `Map<String, Object>` to pass parameters securely.
+
+## 2026-07-07 - [InvestigationItemController JPQL Injection Fix]
+**Vulnerability:** JPQL injection due to unparameterized string concatenation with user input in the `getSelectedItems()` query for `InvestigationItemController`.
+**Learning:** Found widespread unparameterized queries utilizing `like '%" + value + "%'` across the codebase, particularly in controllers, exposing the app to SQL injection risk. Fixes must handle case sensitivity in a database-agnostic way (e.g., using `upper(c.name) like :q`).
+**Prevention:** Always use parameterized queries for dynamic input within JPQL and map parameters via the injected `Map`.
