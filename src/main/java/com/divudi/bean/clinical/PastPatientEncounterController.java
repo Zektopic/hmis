@@ -1719,7 +1719,9 @@ public class PastPatientEncounterController implements Serializable {
     }
 
 //    public List<PatientEncounter> getSelectedItems() {
-//        selectedItems = getFacade().findByJpql("select c from PatientEncounter c where c.retired=false and i.institutionType = com.divudi.core.data.PatientEncounterType.Agency and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+//        java.util.Map<String, Object> m = new java.util.HashMap<>();
+//        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+//        selectedItems = getFacade().findByJpql("select c from PatientEncounter c where c.retired=false and i.institutionType = com.divudi.core.data.PatientEncounterType.Agency and upper(c.name) like :q order by c.name", m);
 //        return selectedItems;
 //    }
     public void prepareAdd() {
