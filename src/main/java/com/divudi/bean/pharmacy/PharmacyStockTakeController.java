@@ -936,13 +936,8 @@ public class PharmacyStockTakeController implements Serializable {
             return;
         }
 
-        System.out.println("DEBUG: snapshotBill.id = " + snapshotBill.getId());
-        System.out.println("DEBUG: About to check if BillItems are loaded...");
-
-        // CRITICAL FIX: Do NOT access getBillItems() before buildSnapshotIndexes()
+        // IMPORTANT: Do NOT access getBillItems() before buildSnapshotIndexes()
         // This would trigger lazy loading of all 5,000+ entities
-        System.out.println("DEBUG: Skipping BillItems check to avoid lazy loading trigger");
-        System.out.println("DEBUG: Will build indexes first, then access BillItems safely...");
 
         // Check if the stock taking is already completed
         System.out.println("DEBUG: Checking if stock taking is completed...");
@@ -1347,7 +1342,7 @@ public class PharmacyStockTakeController implements Serializable {
 
         System.out.println("DEBUG: Optimized processing successful. Ready to persist " + physicalCountBill.getBillItems().size() + " items");
 
-        // Separate Bill and BillItem persistence to avoid cascade conflicts
+        // IMPORTANT: Separate Bill and BillItem persistence to avoid cascade conflicts
 
         // Step 1: Store BillItems temporarily and clear from Bill to prevent cascade persistence
         java.util.List<BillItem> billItemsToProcess = new java.util.ArrayList<>(physicalCountBill.getBillItems());
@@ -1391,7 +1386,7 @@ public class PharmacyStockTakeController implements Serializable {
     }
 
     /**
-     * Native SQL implementation for stock count bill upload - CRITICAL PERFORMANCE FIX
+     * Native SQL implementation for stock count bill upload - IMPORTANT PERFORMANCE FIX
      * Bypasses JPA completely to address severe performance crisis:
      * - Current issue: 2 items = 5 minutes, 10 items = 20 minutes
      * - Target: 2 items < 5 seconds, 10 items < 10 seconds
@@ -2229,7 +2224,7 @@ public class PharmacyStockTakeController implements Serializable {
 
         System.out.println("DEBUG: Bill.id = " + b.getId());
 
-        // CRITICAL: Do NOT access b.getBillItems() at all - it triggers lazy loading!
+        // IMPORTANT: Do NOT access b.getBillItems() at all - it triggers lazy loading!
         // For lightweight loading, BillItems will be loaded lazily when needed for upload processing
         String billItemsStatus = enableLightweightBillLoading ? "LAZY_NOT_LOADED (lightweight mode)" : "UNKNOWN";
         System.out.println("DEBUG: Bill.billItems = " + billItemsStatus);
