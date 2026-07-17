@@ -6,6 +6,7 @@ package com.divudi.core.data;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -386,10 +387,9 @@ public class FinancialReport {
 
     public List<BillTypeAtomic> getBillTypesForRefundedCash() {
         if (billTypesForRefundedCash == null) {
+            EnumSet<BillCategory> refundCategories = EnumSet.of(BillCategory.REFUND, BillCategory.CANCELLATION, BillCategory.PAYMENTS);
             billTypesForRefundedCash = Arrays.stream(BillTypeAtomic.values())
-                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
-                            || e.getBillCategory() == BillCategory.CANCELLATION
-                            || e.getBillCategory() == BillCategory.PAYMENTS)
+                    .filter(e -> refundCategories.contains(e.getBillCategory()))
                     .collect(Collectors.toList());
         }
         return billTypesForRefundedCash;
