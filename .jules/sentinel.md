@@ -52,3 +52,8 @@
 **Vulnerability:** JPQL string concatenation directly consuming user input (`query.toUpperCase()` and `getSelectText()`) in `AntibioticController.completeAntibiotic` and `getSelectedItems`.
 **Learning:** Raw string concatenations in JPQL queries in the JSF backing beans represent a prevalent SQL injection risk and must be parameterized.
 **Prevention:** Always use parameterized JPQL queries (e.g. `upper(c.name) like :q` and `getFacade().findByJpql(sql, m)`) to prevent SQL injection when retrieving data based on user inputs.
+
+## 2026-06-21 - JPQL Injection via String Concatenation in PharmacyBillSearch and DealorPaymentBillSearch
+**Vulnerability:** Found a critical JPQL injection point in `PharmacyBillSearch.java` and `DealorPaymentBillSearch.java` where user input `txtSearch.toUpperCase()` was directly concatenated into a LIKE clause within a dynamic query.
+**Learning:** The use of `toUpperCase()` in controller code combined with string concatenation is a recurring pattern used to bypass database-level case-sensitivity without utilizing parameterized queries. This bypasses security checks and allows arbitrary SQL execution.
+**Prevention:** Use the JPQL `upper()` function within the query itself combined with parameterized binding via `temMap.put("q", "%" + txtSearch.trim().toUpperCase() + "%")` to ensure both case-insensitivity and secure input handling.
