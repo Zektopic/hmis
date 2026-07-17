@@ -585,13 +585,16 @@ public class PracticeBookingController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<Staff>();
         } else {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("query", "%" + query.toUpperCase() + "%");
             if (getSpeciality() != null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query ) and p.speciality.id = :specialityId order by p.person.name";
+                m.put("specialityId", getSpeciality().getId());
             } else {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query ) order by p.person.name";
             }
             //////// // System.out.println(sql);
-            suggestions = getStaffFacade().findByJpql(sql);
+            suggestions = getStaffFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
@@ -599,14 +602,16 @@ public class PracticeBookingController implements Serializable {
     public List<Staff> getConsultants() {
         List<Staff> suggestions;
         String sql;
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
 
         if (getSpeciality() != null) {
-            sql = "select p from Staff p where p.retired=false and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
+            sql = "select p from Staff p where p.retired=false and p.speciality.id = :specialityId order by p.person.name";
+            m.put("specialityId", getSpeciality().getId());
         } else {
             sql = "select p from Doctor p where p.retired=false order by p.person.name";
         }
         //////// // System.out.println(sql);
-        suggestions = getStaffFacade().findByJpql(sql);
+        suggestions = getStaffFacade().findByJpql(sql, m);
 
         return suggestions;
     }
