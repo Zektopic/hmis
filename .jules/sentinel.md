@@ -57,3 +57,8 @@
 **Vulnerability:** Found a critical JPQL injection point in `PharmacyBillSearch.java` and `DealorPaymentBillSearch.java` where user input `txtSearch.toUpperCase()` was directly concatenated into a LIKE clause within a dynamic query.
 **Learning:** The use of `toUpperCase()` in controller code combined with string concatenation is a recurring pattern used to bypass database-level case-sensitivity without utilizing parameterized queries. This bypasses security checks and allows arbitrary SQL execution.
 **Prevention:** Use the JPQL `upper()` function within the query itself combined with parameterized binding via `temMap.put("q", "%" + txtSearch.trim().toUpperCase() + "%")` to ensure both case-insensitivity and secure input handling.
+
+## 2025-05-24 - [Fix SQL Injection in AmpController]
+**Vulnerability:** JPQL Injection in `AmpController.java` (`getSelectedItems`) due to manual string concatenation of user input (`getSelectText()`) combined with string manipulation (`toUpperCase()`) inside the query.
+**Learning:** Manual case-insensitive matching attempts (like `.toUpperCase()`) in JPQL strings are a frequent anti-pattern that leads to SQL injection. Developers often concatenate raw strings instead of using `upper(c.field) like :query`.
+**Prevention:** Always use parameterized JPQL queries with a `Map<String, Object>`. For case-insensitive `LIKE` searches, use JPQL's `upper()` or `lower()` function directly in the query string and format the parameter value accordingly (e.g., `%VALUE%`).
