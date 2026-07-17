@@ -82,3 +82,8 @@
 **Vulnerability:** A critical SQL/JPQL injection vulnerability existed in `AmpController.java` within the `getSelectedItems()` method. User input from `getSelectText()` was directly concatenated into the JPQL query string inside a `LIKE` clause (e.g., `(c.name) like '%" + getSelectText().toUpperCase() + "%'`).
 **Learning:** The codebase has a widespread pattern of constructing dynamic JPQL queries via string concatenation rather than using parameterized queries. When performing case-insensitive searches in JPQL, developers often manipulate the input string before concatenation instead of parameterizing it and using JPQL functions like `upper()`.
 **Prevention:** Always use parameterized queries for dynamic input. When case-insensitivity is needed, pass the exact input (or slightly modified like adding wildcards) as a parameter and apply functions like `upper()` to the entity field directly in the JPQL string (e.g., `upper(c.name) like :param`).
+
+## 2026-07-05 - SQL Injection in InvestigationItem Controller
+**Vulnerability:** Found critical JPQL injection in `InvestigationItemController.java` and `InvestigationItemDynamicLabelController.java` where user input was directly concatenated into `LIKE` clauses.
+**Learning:** Similar to past findings, the application's search functionality inside JSF controllers frequently builds JPQL dynamically using string concatenation, completely bypassing query parameterization and exposing the system to injection attacks. The use of `upper(c.name)` helps preserve case-insensitive search logic when migrating to parameterized queries.
+**Prevention:** Always use parameterized queries (e.g. `where upper(c.name) like :q`) with a `Map<String, Object>` to pass parameters securely.
