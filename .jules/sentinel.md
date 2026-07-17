@@ -102,3 +102,8 @@
 **Vulnerability:** The `txtSearch` user input parameter was directly concatenated into JPQL `LIKE` clauses across several controllers (`LabReportSearchByInstitutionController`, `InstitutionLabSumeryController`, `LabReportSearchByDepartmentController`), exposing critical SQL Injection vulnerabilities. The pattern typically looked like `(c.name) like '%" + txtSearch.toUpperCase() + "%'`.
 **Learning:** In addition to parameterized queries, JPQL function calls like `upper(...)` must be used dynamically inside the query structure (`upper(c.name) like :param`) to retain intended application behavior (e.g., case-insensitivity) while preventing injection, as opposed to concatenating mutated strings directly.
 **Prevention:** Always use parameterized queries and pass dynamic filters through a `Map<String, Object>` rather than string concatenation. Use JPQL string functions directly in the query strings.
+
+## 2026-07-13 - [InstitutionLabSumeryController JPQL Injection Fix]
+**Vulnerability:** JPQL Injection in `InstitutionLabSumeryController.java` (`searchAll` and `createPatientInvestigaationList`) where `txtSearch` user input was concatenated directly into queries.
+**Learning:** JPQL queries using string concatenation to enforce case insensitivity (e.g., `like '%" + txtSearch.toUpperCase() + "%'`) are a recurring SQL injection vector in the codebase.
+**Prevention:** Use parameterized map queries (e.g., `findByJpql(sql, m, 50)`) and the JPQL `upper(...)` function for case-insensitive `LIKE` searches (e.g., `upper(p.name) like :q`) to safely maintain expected behavior without string concatenation.
