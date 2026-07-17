@@ -72,3 +72,8 @@
 **Vulnerability:** JPQL injection point found in `InvestigationController.java` where user search terms were directly concatenated into `LIKE` clauses (e.g. `(c.name) like '%" + query.toUpperCase() + "%'`).
 **Learning:** The pattern of directly building JPQL strings is prevalent in the JSF backing beans for search boxes and autocomplete features. This bypasses JPA parameterization and opens up SQL injection.
 **Prevention:** Convert string concatenations to use parameterized queries (`:q`) and use a `Map<String, Object>` to pass `"%" + query.toUpperCase() + "%"` via the facade's `findByJpql(sql, params)` method.
+
+## 2026-07-03 - JPQL Injection via String Concatenation in InvestigationCategoryController
+**Vulnerability:** Found a critical SQL injection point in `InvestigationCategoryController.java` where user input via `getSelectText()` was directly concatenated into a JPQL string within a LIKE clause inside the `getSelectedItems` method.
+**Learning:** Similar to past findings, the application's search functionality inside JSF controllers frequently builds JPQL dynamically using string concatenation with `like '%" + <parameter> + "%'`, completely bypassing query parameterization and exposing the system to injection attacks.
+**Prevention:** Consistently utilize parameterized queries for ALL user input via `java.util.Map<String, Object>` passed into the `findByJpql` facade methods instead of interpolating strings directly into the query. When mimicking `toUpperCase()` for case-insensitive search, use the `upper()` function inside JPQL (e.g., `upper(c.name) like :q`) to maintain logic parity securely.
