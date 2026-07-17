@@ -412,17 +412,27 @@ public class UserManagementApi {
             missingCategories.removeAll(matchedCategories);
             if (!missingCategories.isEmpty()) return errorResponse("Unknown privilege categories: " + missingCategories, 400);
 
+            Set<Privileges> existingPrivilegesSet = new HashSet<>();
+            if (!matchingPrivileges.isEmpty()) {
+                Map<String, Object> m = new HashMap<>();
+                m.put("u", u);
+                m.put("privs", matchingPrivileges);
+                m.put("d", d);
+
+                String jpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege in :privs and wp.department=:d";
+
+                List<WebUserPrivilege> existingPrivs = webUserPrivilegeFacade.findByJpql(jpql, m);
+                for (WebUserPrivilege wp : existingPrivs) {
+                    if (wp.getPrivilege() != null) {
+                        existingPrivilegesSet.add(wp.getPrivilege());
+                    }
+                }
+            }
+
             int added = 0;
             int skipped = 0;
             for (Privileges p : matchingPrivileges) {
-                Map<String, Object> m = new HashMap<>();
-                m.put("u", u);
-                m.put("p", p);
-                m.put("d", d);
-                List<WebUserPrivilege> ex = webUserPrivilegeFacade.findByJpql(
-                        "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege=:p and wp.department=:d",
-                        m);
-                if (!ex.isEmpty()) {
+                if (existingPrivilegesSet.contains(p)) {
                     skipped++;
                     continue;
                 }
