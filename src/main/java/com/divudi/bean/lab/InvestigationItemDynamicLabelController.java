@@ -263,9 +263,10 @@ public class InvestigationItemDynamicLabelController implements Serializable {
     }
 
     public List<InvestigationItemValueFlag> getSelectedItems() {
+        String jpql = "select c from InvestigationItemValueFlag c where c.retired=false and upper(c.name) like :q order by c.name";
         java.util.Map<String, Object> m = new java.util.HashMap<>();
         m.put("q", "%" + getSelectText().toUpperCase() + "%");
-        selectedItems = getFacade().findByJpql("select c from InvestigationItemValueFlag c where c.retired=false and upper(c.name) like :q order by c.name", m);
+        selectedItems = getFacade().findByJpql(jpql, m);
         return selectedItems;
     }
 
