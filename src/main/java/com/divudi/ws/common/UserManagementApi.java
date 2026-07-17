@@ -334,21 +334,35 @@ public class UserManagementApi {
             if (req.getDepartmentId() == null) return errorResponse("departmentId is required for privileges to take effect", 400);
             Department d = departmentFacade.find(req.getDepartmentId());
             if (d == null) return errorResponse("Department not found: " + req.getDepartmentId(), 404);
+
+            List<Privileges> validPrivileges = new ArrayList<>();
             for (String pName : req.getPrivileges()) {
-                Privileges p;
                 try {
-                    p = Privileges.valueOf(pName);
+                    validPrivileges.add(Privileges.valueOf(pName));
                 } catch (IllegalArgumentException e) {
                     return errorResponse("Invalid privilege: " + pName, 400);
                 }
+            }
+
+            Set<Privileges> existingPrivilegesSet = new HashSet<>();
+            if (!validPrivileges.isEmpty()) {
                 Map<String, Object> m = new HashMap<>();
                 m.put("u", u);
-                m.put("p", p);
+                m.put("privs", validPrivileges);
                 m.put("d", d);
-                List<WebUserPrivilege> ex = webUserPrivilegeFacade.findByJpql(
-                        "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege=:p and wp.department=:d",
-                        m);
-                if (!ex.isEmpty()) continue;
+
+                String jpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege in :privs and wp.department=:d";
+
+                List<WebUserPrivilege> existingPrivs = webUserPrivilegeFacade.findByJpql(jpql, m);
+                for (WebUserPrivilege wp : existingPrivs) {
+                    if (wp.getPrivilege() != null) {
+                        existingPrivilegesSet.add(wp.getPrivilege());
+                    }
+                }
+            }
+
+            for (Privileges p : validPrivileges) {
+                if (existingPrivilegesSet.contains(p)) continue;
                 WebUserPrivilege wp = new WebUserPrivilege();
                 wp.setWebUser(u);
                 wp.setPrivilege(p);
