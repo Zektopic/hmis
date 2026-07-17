@@ -1078,10 +1078,10 @@ public class InvestigationController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
-            // sql = "select c from Investigation c where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
-            sql = "select c from Investigation c where c.retired=false and type(c)!=Packege and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
-            //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
+            sql = "select c from Investigation c where c.retired=false and type(c)!=Packege and upper(c.name) like :q order by c.name";
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
@@ -1319,7 +1319,9 @@ public class InvestigationController implements Serializable {
         if (selectText.trim().equals("")) {
             selectedItems = getFacade().findByJpql("select c from Investigation c where c.retired=false order by c.name");
         } else {
-            selectedItems = getFacade().findByJpql("select c from Investigation c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + getSelectText().toUpperCase() + "%");
+            selectedItems = getFacade().findByJpql("select c from Investigation c where c.retired=false and upper(c.name) like :q order by c.name", m);
         }
         return selectedItems;
     }
@@ -1389,8 +1391,9 @@ public class InvestigationController implements Serializable {
 //            m.put("ser", Investigation.class);
 //            m.put("pak", Investigation.class);
             m.put("ins", getSessionController().getInstitution());
+            m.put("q", "%" + qry.toUpperCase() + "%");
             sql = "select c from Item c where ( type(c) = Investigation or type(c) = Packege ) "
-                    + "and c.retired=false and c.institution=:ins and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name";
+                    + "and c.retired=false and c.institution=:ins and upper(c.name) like :q order by c.name";
             List<Investigation> completeItems = getFacade().findByJpql(sql, m);
             return completeItems;
         } else {

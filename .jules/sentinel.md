@@ -43,7 +43,6 @@
 **Vulnerability:** Unparameterized string concatenation in JPQL queries creating SQL injection vulnerabilities.
 **Learning:** When applying security fixes to existing Java files to resolve SQL injection, utilizing fully qualified class names like `java.util.Map` and `java.util.HashMap` within the method prevents the need to alter imports at the top of the file, reducing the risk of build failures or conflicting imports.
 **Prevention:** Use parameterized queries with a parameter map passed to `findByJpql(sql, map)`, employing fully qualified class names when instantiating the map inline.
-<<<<<<< HEAD
 ## 2024-05-24 - [Fix SQL Injection in ClinicController]
 **Vulnerability:** Found a SQL injection vulnerability in `ClinicController.java` (`completeStaff` method) where user input (`query`) and property properties (`speciality.id`) were directly concatenated into JPQL strings, putting the application at risk of critical SQL injection.
 **Learning:** JPQL string concatenation is prevalent across multiple controller files. When fixing `like '%" + value + "%'` patterns, remember to also parameterize adjacent fields like IDs (e.g. `speciality.id = ` + getSpeciality().getId()) in the same query string. Using fully qualified names (e.g., `java.util.Map`) for injected data types helps avoid potential compilation issues due to missing imports. Also when converting `query.toUpperCase()` inside a LIKE clause to parameterized queries, use the JPQL `upper()` function around the entity attribute (e.g. `upper(p.person.name) like :q`) to preserve the case-insensitive search logic.
@@ -68,3 +67,8 @@
 **Vulnerability:** JPQL query strings were constructed using direct string concatenation of user input with the `LIKE` operator (e.g., `(c.name) like '%" + getSelectText().toUpperCase() + "%'`). This allows SQL injection if the input contains quotes.
 **Learning:** The codebase contains many unparameterized JPQL queries. When fixing case-insensitive `LIKE` queries, parameterizing the input string and using the JPQL `upper()` function (e.g., `upper(c.name) like :name`) safely preserves logic and case insensitivity.
 **Prevention:** Always use parameterized queries for dynamic values, and avoid constructing JPQL queries with string concatenation.
+
+## 2026-07-02 - SQL Injection via String Concatenation in JPQL LIKE clauses
+**Vulnerability:** JPQL injection point found in `InvestigationController.java` where user search terms were directly concatenated into `LIKE` clauses (e.g. `(c.name) like '%" + query.toUpperCase() + "%'`).
+**Learning:** The pattern of directly building JPQL strings is prevalent in the JSF backing beans for search boxes and autocomplete features. This bypasses JPA parameterization and opens up SQL injection.
+**Prevention:** Convert string concatenations to use parameterized queries (`:q`) and use a `Map<String, Object>` to pass `"%" + query.toUpperCase() + "%"` via the facade's `findByJpql(sql, params)` method.
