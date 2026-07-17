@@ -508,11 +508,10 @@ public class FinancialReport {
         if (billTypesForRefundedCreditCard == null) {
             // Add BillTypeAtomic entries that represent credit card refunds
             // Assuming CHANNEL_REFUND is refunded via credit card
+            EnumSet<BillCategory> refundCategories = EnumSet.of(BillCategory.REFUND, BillCategory.CANCELLATION);
             billTypesForRefundedCreditCard = Arrays.stream(BillTypeAtomic.values())
-                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
-                            || e.getBillCategory() == BillCategory.CANCELLATION)
+                    .filter(e -> refundCategories.contains(e.getBillCategory()))
                     .collect(Collectors.toList());
-            // Add other BillTypeAtomic entries if they are refunded via credit card
         }
         return billTypesForRefundedCreditCard;
     }
@@ -592,12 +591,11 @@ public class FinancialReport {
         if (billTypesForRefundedDebitCard == null) {
             // Add BillTypeAtomic entries related to debit card refunds
             // Assuming CHANNEL_REFUND might be refunded to a debit card
+            EnumSet<BillCategory> refundCategories = EnumSet.of(BillCategory.REFUND, BillCategory.CANCELLATION, BillCategory.PAYMENTS);
             billTypesForRefundedDebitCard = Arrays.stream(BillTypeAtomic.values())
-                    .filter(e -> e.getBillCategory() == BillCategory.REFUND
-                            || e.getBillCategory() == BillCategory.CANCELLATION
-                            || e.getBillCategory() == BillCategory.PAYMENTS)
+                    .filter(e -> refundCategories.contains(e.getBillCategory()) || e == BillTypeAtomic.CHANNEL_REFUND)
+                    .distinct()
                     .collect(Collectors.toList());
-            // Include any other applicable BillTypeAtomic entries for debit card refunds
         }
         return billTypesForRefundedDebitCard;
     }
