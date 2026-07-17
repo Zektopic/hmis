@@ -1523,31 +1523,57 @@ public class ServiceSummery implements Serializable {
 
     }
 
-    private String fetchStaffs(BillItem bi, FeeType feeType) {
-        String name = "";
-        HashMap hm = new HashMap();
-        String sql = "Select f from "
-                + " BillFee f where "
-                + " f.retired=false "
-                + " and f.billItem=:b and "
-                + " f.fee.feeType=:ftp";
-        hm.put("b", bi);
-        hm.put("ftp", feeType);
-
-        try {
-            for (BillFee bf : (List<BillFee>) getBillFeeFacade().findByJpql(sql, hm)) {
-                if ("".equalsIgnoreCase(name)) {
-
-                } else {
-                    name += " ," + bf.getStaff().getPerson().getName();
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+    private java.util.Map<BillItem, String> fetchStaffsForBillItems(List<BillItem> list, FeeType feeType) {
+        java.util.Map<BillItem, String> staffsMap = new java.util.HashMap<>();
+        if (list == null || list.isEmpty()) {
+            return staffsMap;
         }
 
-        return name;
+        List<BillItem> persistedItems = new ArrayList<>();
+        for (BillItem bi : list) {
+            if (bi != null && bi.getId() != null) {
+                persistedItems.add(bi);
+            }
+        }
 
+        if (persistedItems.isEmpty()) {
+            return staffsMap;
+        }
+
+        int batchSize = 500;
+        for (int i = 0; i < persistedItems.size(); i += batchSize) {
+            int toIndex = Math.min(i + batchSize, persistedItems.size());
+            List<BillItem> batch = persistedItems.subList(i, toIndex);
+
+            HashMap<String, Object> hm = new HashMap<>();
+            String sql = "Select f from "
+                    + " BillFee f where "
+                    + " f.retired=false "
+                    + " and f.billItem in (:b) and "
+                    + " f.fee.feeType=:ftp";
+            hm.put("b", batch);
+            hm.put("ftp", feeType);
+
+            try {
+                for (BillFee bf : (List<BillFee>) getBillFeeFacade().findByJpql(sql, hm)) {
+                    BillItem bi = bf.getBillItem();
+                    String currentName = staffsMap.getOrDefault(bi, "");
+                    String staffName = bf.getStaff() != null && bf.getStaff().getPerson() != null ? bf.getStaff().getPerson().getName() : "";
+
+                    if (staffName != null && !staffName.trim().isEmpty()) {
+                        if ("".equalsIgnoreCase(currentName)) {
+                            staffsMap.put(bi, staffName);
+                        } else {
+                            staffsMap.put(bi, currentName + " ," + staffName);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        return staffsMap;
     }
 
     private double calFeeMargin(BillItem bi, FeeType feeType) {
@@ -1659,13 +1685,14 @@ public class ServiceSummery implements Serializable {
         billItemWithFees = new ArrayList<>();
 
         List<BillItem> list = calBillItems(BillType.OpdBill, false);
+        java.util.Map<BillItem, String> staffNamesMap = fetchStaffsForBillItems(list, FeeType.Staff);
 
         for (BillItem i : list) {
             BillItemWithFee bi = new BillItemWithFee();
             bi.setBillItem(i);
             bi.setProFee(calFee(i, FeeType.Staff));
             bi.setHospitalFee(calFee(i, FeeType.OwnInstitution));
-            bi.setStaffsNames(fetchStaffs(i, FeeType.Staff));
+            bi.setStaffsNames(staffNamesMap.getOrDefault(i, ""));
             bi.setOutSideFee(calFee(i, FeeType.OtherInstitution));
             bi.setVatFee(calFeeVat(i));
             bi.setStaffFee(calFee(i, FeeType.Staff));
@@ -1708,13 +1735,14 @@ public class ServiceSummery implements Serializable {
         billItemWithFees = new ArrayList<>();
 
         List<BillItem> list = calBillItems(BillType.OpdBill, false);
+        java.util.Map<BillItem, String> staffNamesMap = fetchStaffsForBillItems(list, FeeType.Staff);
 
         for (BillItem i : list) {
             BillItemWithFee bi = new BillItemWithFee();
             bi.setBillItem(i);
             bi.setProFee(calFee(i, FeeType.Staff));
             bi.setHospitalFee(calFee(i, FeeType.OwnInstitution) + calFee(i, FeeType.CollectingCentre));
-            bi.setStaffsNames(fetchStaffs(i, FeeType.Staff));
+            bi.setStaffsNames(staffNamesMap.getOrDefault(i, ""));
             bi.setVatFee(calFeeVat(i));
             billItemWithFees.add(bi);
         }
