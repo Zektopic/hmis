@@ -478,6 +478,19 @@ cached per session at login and won't pick up a new row otherwise. This came up 
 `BhtSummeryController.settle()` (`InwardSettleFinalBill`), where the local `buddhika`
 user had the privilege for `Store`/`Main Pharmacy` departments but not `Inward`.
 
+**`WebUser.department` is not a fixed "home department" — `SessionController.selectDepartment()`
+overwrites and persists it (`loggedUser.setDepartment(department); getFacede().edit(loggedUser)`)
+every time the department-selection screen is submitted, which is why it pre-fills with
+whatever was picked last time.** The catch for privilege testing:
+`SessionController.getUserPrivileges()` calls
+`fillUserPrivileges(getLoggedUser(), getLoggedUser().getDepartment(), false)` — by the time
+this runs, `getLoggedUser().getDepartment()` already equals the department just selected for
+*this* login, and `deptIsNull=false` means a `DEPARTMENT_ID IS NULL` privilege row is **never**
+matched, no matter which department that is. Query `SELECT DEPARTMENT_ID FROM webuser WHERE
+ID=<id>` *after* selecting the department you're about to test with, and insert the privilege
+row with that exact `DEPARTMENT_ID` — a NULL-department row silently does nothing, even after
+a full logout/login cycle.
+
 ## 21. Inward "Add Services" item picker — the Filter box does not load other departments' items
 
 On `inward/inward_bill_service.xhtml` (and the surgery equivalent) the item selector shows
@@ -656,6 +669,77 @@ button) surfaced these:
   overlay/timing issues. (AJAX listeners do NOT fire this way — only use for full-form submits.)
 - **html2canvas does not capture PrimeFaces overlay panels** (`*_panel` appended near body root render
   blank/absent) — capture page states instead, or read the panel's `innerText` as textual evidence.
+
+## 29. GRN costing Save→Finalize→Approve: `Difference` guard needs a real keyup on Invoice Total at EVERY step
+
+On `pharmacy_grn_costing_with_save_approve.xhtml` the controller field `difference` (checked by
+`Math.abs(difference) > 1` in the finalize/approve actions) is recomputed **only** by the
+`p:ajax event="keyup"` listener on the Invoice Total input (`insv`) — a DOM-set value applied by an
+`ajax="false"` full submit updates `insTotal` server-side but never recalculates `difference`, so the
+approve fails with "The invoice does not match..! Check again" even though the submitted total is
+correct. Worse, after the Finalize → "To Approve GRNs" → Approve navigation the page reloads with
+Invoice Total rendered as `0.00`, so a value that passed at Save/Finalize is gone at the Approve step.
+Fix in automation: on the approve pass, click into `insv`, `Control+a`, `browser_type` the total
+`slowly: true` (real keyups fire the AJAX), confirm the `diff` input reads `0.00`, then click Approve.
+Everything else on that page (row qty/free-qty/batch/expiry/retail-rate inputs, invoice number/date)
+CAN be set directly on the DOM inputs — the `ajax="false"` Save/Finalize buttons submit and apply them
+(verified while testing issue #22120).
+
+## 30. `ward_pharmacy_bht_issue_request_bill.xhtml` — "New Bill" silently discards unsaved items
+
+On the "Start Pharmacy Request for Inpatients" flow, the "Add Dispense Only" button only stages
+`BillItem`s in the in-memory `PreBill` — nothing is persisted until "Settle Request" is clicked (the
+"Save Draft" button that would otherwise persist an intermediate `PharmacyBhtPre` is `rendered="false"`,
+per a comment in the page noting there's currently no way to resume a saved draft). The "New Bill"
+button (`actionListener="#{pharmacyRequestForBhtController.resetAll}"`) looks like a reasonable "finish
+this request" action but actually **discards all staged items with no confirmation** and resets the form
+to "Start Pharmacy Request for Inpatients". If a Playwright pass adds items and then clicks "New Bill"
+expecting the request to be saved, a DB check afterward will show nothing was created. Always use
+**"Settle Request"** (confirm-dialog-guarded) to actually persist a BHT pharmacy request. Verified while
+testing issue #22153.
+
+## 31. `ward_pharmacy_bht_issue_request_bill.xhtml`'s "Add Dispense Only" path sets `department`/`toDepartment` backwards
+
+`PharmacyRequestForBhtController`'s no-prescription creation path (the one behind
+"Add Dispense Only" → "Settle Request") sets `getPreBill().setToDepartment(getDepartment())`,
+where `getDepartment()` is the page's *Requesting Department* selector (the ward, e.g.
+"Inward") — the opposite of what the prescription-based "Calculate & Add" path does. The
+resulting bill ends up with `department` = the requesting ward and `toDepartment` = the
+requesting ward too, instead of `toDepartment` = the fulfilling pharmacy. Per §16, the
+pharmacist's "Issue Medicines" list (`ward_pharmacy_bht_issue_request_list_for_issue.xhtml`)
+filters on `toDepartment = session department`, so a request created via "Add Dispense Only"
+silently never appears there — "Search All"/"Search Not Issued" both return "No records
+found." even with the correct BHT number. This looks like a pre-existing, unrelated bug (not
+reproducible via the prescription-based creation path) — found incidentally while testing
+issue #22000; not fixed there since it was out of that issue's scope. If blocked on this
+during a future E2E pass, either use "Calculate & Add" instead of "Add Dispense Only" to
+create the test request, or correct `BILL.DEPARTMENT_ID`/`TODEPARTMENT_ID` directly in the
+local dev DB to unblock testing.
+
+## 32. A `FacesMessage` can be server-confirmed even when the browser never shows it
+
+Two related traps when checking whether `JsfUtil.addWarningMessage(...)` actually fired:
+
+- **A page-local `p:growl` without a `life` attribute never auto-dismisses**, unlike
+  `template.xhtml`'s global growl (`life="3000"`). If a later click lands on where the toast is
+  rendered, Playwright's actionability check reports `<span class="ui-growl-title">...
+  intercepts pointer events` and the click times out. Work around it in a test session with
+  `browser_evaluate`: `() => document.querySelectorAll('.ui-growl-item').forEach(el =>
+  el.remove())` — do not treat this as something the product code needs to fix unless the
+  issue you're working on is specifically about that page's growl behavior.
+- **On an `ajax="false"` (full-postback) button, a `life`-bound growl can auto-hide before you
+  take a snapshot**, making it look like the message never fired even though it did. Don't
+  trust a missed visual — inspect the actual HTTP response instead:
+  `browser_network_requests` (filter on the page's `.xhtml`, `static: true` if needed) to find
+  the POST matching the button's `name` parameter (e.g. `j_idt523%3AbtnAdd=`), then
+  `browser_network_request` with `part: "response-body"` on that index. For an AJAX
+  (`javax.faces.partial.ajax=true`) update, look for `<update id="...:growl">` containing
+  `PrimeFaces.cw("Growl",...,msgs:[{summary:"...",severity:'warn'}]})`. For a full postback,
+  grep the (often huge) HTML response body for the expected message text instead of loading it
+  into context. Verified while testing issue #22000, where this was the deciding evidence that
+  the warning fired correctly on a page whose *unrelated* pre-existing widget-init JS error
+  (`TypeError: Cannot read properties of undefined (reading 'hasAttribute')`, present since
+  before any interaction) prevented the growl from rendering visually at all.
 
 ## Quick checklist
 
