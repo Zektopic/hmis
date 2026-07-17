@@ -10,6 +10,8 @@ package com.divudi.bean.common;
 //import com.itextpdf.text.pdf.Barcode39;
 import java.awt.Color;
 import java.io.File;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -59,13 +61,13 @@ public class BarcodeController {
         if (code == null || code.trim().equals("")) {
             return null;
         }
-        File barcodeFile = new File(code);
         try {
-            BarcodeImageHandler.saveJPEG(BarcodeFactory.createCode128(code), barcodeFile);
-            FileInputStream stream = new FileInputStream(barcodeFile);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            BarcodeImageHandler.writeJPEG(BarcodeFactory.createCode128(code), out);
+            byte[] bytes = out.toByteArray();
             barcode = DefaultStreamedContent.builder()
                     .contentType("image/jpeg")
-                    .stream(() -> stream)
+                    .stream(() -> new ByteArrayInputStream(bytes))
                     .build();
         } catch (Exception ex) {
         }
@@ -82,14 +84,13 @@ public class BarcodeController {
         //Barcode  
         //   ////System.out.println("creating pt bar code");
 
-        File barcodeFile = new File(getPatientController().getCurrent().toString());
-        //   ////System.out.println("current = " + getPatientController().getCurrent());
         if (getPatientController().getCurrent() != null && getPatientController().getCurrent().getCode() != null && !getPatientController().getCurrent().getCode().trim().equals("")) {
             //   ////System.out.println("getCurrent().getCode() = " + getPatientController().getCurrent().getCode());
             try {
-                BarcodeImageHandler.saveJPEG(BarcodeFactory.createCode128C(getPatientController().getCurrent().getCode()), barcodeFile);
-                InputStream targetStream = new FileInputStream(barcodeFile);
-                StreamedContent str = DefaultStreamedContent.builder().contentType("image/jpeg").name(barcodeFile.getName()).stream(() -> targetStream).build();
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                BarcodeImageHandler.writeJPEG(BarcodeFactory.createCode128C(getPatientController().getCurrent().getCode()), out);
+                byte[] bytes = out.toByteArray();
+                StreamedContent str = DefaultStreamedContent.builder().contentType("image/jpeg").name("barcode.jpg").stream(() -> new ByteArrayInputStream(bytes)).build();
                 barcode = str;
 
             } catch (Exception ex) {
@@ -98,13 +99,14 @@ public class BarcodeController {
         } else {
             //   ////System.out.println("else = ");
             try {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
                 Barcode bc = BarcodeFactory.createCode128C("0000");
                 bc.setBarHeight(5);
                 bc.setBarWidth(3);
                 bc.setDrawingText(true);
-                BarcodeImageHandler.saveJPEG(bc, barcodeFile);
-                InputStream targetStream = new FileInputStream(barcodeFile);
-                StreamedContent str = DefaultStreamedContent.builder().contentType("image/jpeg").name(barcodeFile.getName()).stream(() -> targetStream).build();
+                BarcodeImageHandler.writeJPEG(bc, out);
+                byte[] bytes = out.toByteArray();
+                StreamedContent str = DefaultStreamedContent.builder().contentType("image/jpeg").name("barcode.jpg").stream(() -> new ByteArrayInputStream(bytes)).build();
                 barcode = str;
             } catch (Exception ex) {
                 //   ////System.out.println("ex = " + ex.getMessage());
@@ -119,11 +121,11 @@ public class BarcodeController {
         if (code == null || code.trim().equals("")) {
             return null;
         }
-        File barcodeFile = new File(code);
         try {
-            BarcodeImageHandler.saveJPEG(BarcodeFactory.createCode128C(code), barcodeFile);
-            InputStream targetStream = new FileInputStream(barcodeFile);
-            StreamedContent str = DefaultStreamedContent.builder().contentType("image/jpeg").name(barcodeFile.getName()).stream(() -> targetStream).build();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            BarcodeImageHandler.writeJPEG(BarcodeFactory.createCode128C(code), out);
+            byte[] bytes = out.toByteArray();
+            StreamedContent str = DefaultStreamedContent.builder().contentType("image/jpeg").name("barcode.jpg").stream(() -> new ByteArrayInputStream(bytes)).build();
             barcode = str;
         } catch (Exception ex) {
             //   ////System.out.println("ex = " + ex.getMessage());
