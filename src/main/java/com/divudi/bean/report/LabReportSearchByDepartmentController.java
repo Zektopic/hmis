@@ -121,8 +121,11 @@ public class LabReportSearchByDepartmentController implements Serializable {
     public void searchAll() {
         String sql;
         if (txtSearch != null) {
-            sql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p where ((p.name) like '%" + txtSearch.toUpperCase() + "%' or (b.insId) like '%" + txtSearch.toUpperCase() + "%' or p.phone like '%" + txtSearch + "%' or (i.name) like '%" + txtSearch.toUpperCase() + "%' ) order by pi.id desc";
-            searchedPatientInvestigations = getPiFacade().findByJpql(sql, 50);
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + txtSearch.toUpperCase() + "%");
+            m.put("qp", "%" + txtSearch + "%");
+            sql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p where (upper(p.name) like :q or upper(b.insId) like :q or p.phone like :qp or upper(i.name) like :q ) order by pi.id desc";
+            searchedPatientInvestigations = getPiFacade().findByJpql(sql, m, 50);
         } else {
             searchedPatientInvestigations = null;
         }
@@ -875,7 +878,9 @@ public class LabReportSearchByDepartmentController implements Serializable {
                 sql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p where b.createdAt between :fromDate and :toDate order by pi.id desc";
                 patientInvestigations = getPiFacade().findByJpql(sql, m, TemporalType.TIMESTAMP, 100);
             } else {
-                sql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p where ((p.name) like '%" + txtSearch.toUpperCase() + "%' or (b.insId) like '%" + txtSearch.toUpperCase() + "%' or p.phone like '%" + txtSearch + "%' or (i.name) like '%" + txtSearch.toUpperCase() + "%' ) and b.createdAt between :fromDate and :toDate order by pi.id desc";
+                m.put("q", "%" + txtSearch.toUpperCase() + "%");
+                m.put("qp", "%" + txtSearch + "%");
+                sql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p where (upper(p.name) like :q or upper(b.insId) like :q or p.phone like :qp or upper(i.name) like :q ) and b.createdAt between :fromDate and :toDate order by pi.id desc";
                 patientInvestigations = getPiFacade().findByJpql(sql, m, TemporalType.TIMESTAMP);
             }
         }
