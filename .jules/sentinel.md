@@ -47,3 +47,8 @@
 **Vulnerability:** Found a SQL injection vulnerability in `ClinicController.java` (`completeStaff` method) where user input (`query`) and property properties (`speciality.id`) were directly concatenated into JPQL strings, putting the application at risk of critical SQL injection.
 **Learning:** JPQL string concatenation is prevalent across multiple controller files. When fixing `like '%" + value + "%'` patterns, remember to also parameterize adjacent fields like IDs (e.g. `speciality.id = ` + getSpeciality().getId()) in the same query string. Using fully qualified names (e.g., `java.util.Map`) for injected data types helps avoid potential compilation issues due to missing imports. Also when converting `query.toUpperCase()` inside a LIKE clause to parameterized queries, use the JPQL `upper()` function around the entity attribute (e.g. `upper(p.person.name) like :q`) to preserve the case-insensitive search logic.
 **Prevention:** Always use parameterized JPQL queries with a `Map<String, Object>` rather than string concatenation when passing user inputs or variables into queries.
+
+## 2024-10-24 - [CRITICAL] Fix SQL Injection in AntibioticController
+**Vulnerability:** JPQL string concatenation directly consuming user input (`query.toUpperCase()` and `getSelectText()`) in `AntibioticController.completeAntibiotic` and `getSelectedItems`.
+**Learning:** Raw string concatenations in JPQL queries in the JSF backing beans represent a prevalent SQL injection risk and must be parameterized.
+**Prevention:** Always use parameterized JPQL queries (e.g. `upper(c.name) like :q` and `getFacade().findByJpql(sql, m)`) to prevent SQL injection when retrieving data based on user inputs.
