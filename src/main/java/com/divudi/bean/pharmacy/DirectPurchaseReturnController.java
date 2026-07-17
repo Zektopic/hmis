@@ -43,6 +43,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.inject.Inject;
@@ -55,6 +57,8 @@ import javax.inject.Named;
 @Named
 @SessionScoped
 public class DirectPurchaseReturnController implements Serializable {
+
+    private static final Logger logger = Logger.getLogger(DirectPurchaseReturnController.class.getName());
 
     /**
      * EJBs
@@ -463,7 +467,7 @@ public class DirectPurchaseReturnController implements Serializable {
             if (!returnFlag) {
                 getPharmaceuticalBillItemFacade().edit(pbi);
                 getBillItemFacade().edit(i);
-                // TODO: Log error
+                logger.log(Level.SEVERE, "Stock deduction failed for BillItem: {0}", i.getId());
             }
 
             saveBillFee(i);
