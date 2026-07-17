@@ -1712,12 +1712,13 @@ public class PatientInvestigationController implements Serializable {
             getCurrent().getSampledAt();
             Map temMap = new HashMap();
             if (listIncludingReceived) {
-                temSql = "SELECT i FROM PatientInvestigation i where i.retired=false and i.collected = true and i.sampledAt between :fromDate and :toDate and i.receiveDepartment.id = " + getSessionController().getDepartment().getId();
+                temSql = "SELECT i FROM PatientInvestigation i where i.retired=false and i.collected = true and i.sampledAt between :fromDate and :toDate and i.receiveDepartment.id = :deptId";
             } else {
-                temSql = "SELECT i FROM PatientInvestigation i where i.retired=false and i.collected = true and i.received=false and i.sampledAt between :fromDate and :toDate and i.receiveDepartment.id = " + getSessionController().getDepartment().getId();
+                temSql = "SELECT i FROM PatientInvestigation i where i.retired=false and i.collected = true and i.received=false and i.sampledAt between :fromDate and :toDate and i.receiveDepartment.id = :deptId";
             }
             temMap.put("toDate", getToDate());
             temMap.put("fromDate", getFromDate());
+            temMap.put("deptId", getSessionController().getDepartment().getId());
             lstToReceive = getFacade().findByJpql(temSql, temMap, TemporalType.TIMESTAMP);
         }
         if (lstToReceive == null) {
@@ -1732,13 +1733,15 @@ public class PatientInvestigationController implements Serializable {
             String temSql;
             Map temMap = new HashMap();
             if (selectText == null || selectText.trim().isEmpty()) {
-                temSql = "SELECT i FROM PatientInvestigation i where i.retired=false and i.collected = true and i.sampledAt between :fromDate and :toDate and i.receiveDepartment.id = " + getSessionController().getDepartment().getId();
+                temSql = "SELECT i FROM PatientInvestigation i where i.retired=false and i.collected = true and i.sampledAt between :fromDate and :toDate and i.receiveDepartment.id = :deptId";
             } else {
-                temSql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p   where ((p.name) like '%" + selectText.toUpperCase() + "%' or (b.insId) like '%" + selectText.toUpperCase() + "%' or p.phone like '%" + selectText + "%' or (i.name) like '%" + selectText.toUpperCase() + "%' )  and pi.retired=false and b.createdAt between :fromDate and :toDate and pi.receiveDepartment.id = " + getSessionController().getDepartment().getId();
+                temSql = "select pi from PatientInvestigation pi join pi.investigation i join pi.billItem.bill b join b.patient.person p   where (upper(p.name) like :selectText or upper(b.insId) like :selectText or p.phone like :selectText or upper(i.name) like :selectText) and pi.retired=false and b.createdAt between :fromDate and :toDate and pi.receiveDepartment.id = :deptId";
+                temMap.put("selectText", "%" + selectText.toUpperCase() + "%");
             }
 
             temMap.put("toDate", getToDate());
             temMap.put("fromDate", getFromDate());
+            temMap.put("deptId", getSessionController().getDepartment().getId());
             lstToReceiveSearch = getFacade().findByJpql(temSql, temMap, TemporalType.TIMESTAMP);
         }
 
