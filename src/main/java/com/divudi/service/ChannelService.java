@@ -3383,7 +3383,6 @@ public class ChannelService {
         if (dtoList == null || dtoList.isEmpty()) {
             return null;
         }
-        System.out.println("size of dto list : " + dtoList.size() );
 
         Map<String, ChannelUserSummeryByDateDTO> summeryByDateMap = new HashMap<>();
 
@@ -3391,7 +3390,6 @@ public class ChannelService {
             if (dto.getCashierId() == null) {
                 continue;
             }
-            System.out.println("bill: " + dto.getBillId() + ", payment method: " + dto.getPaymentMethod() + "bta:" + dto.getBillTypeAtomic());
 
             if (dto.getPaymentMethod() == null || dto.getPaymentMethod() == PaymentMethod.MultiplePaymentMethods) {
                 List<Payment> payments = billService.fetchBillPaymentsFromBillId(dto.getBillId());
