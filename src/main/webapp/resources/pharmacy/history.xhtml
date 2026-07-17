@@ -178,7 +178,7 @@
                                                     <h:outputText value="Grand Total Stock"/>
                                                 </th>
                                                 <th class="text-end fw-bold">
-                                                    <h:outputText id="grandTotalBlock" value="#{pharmacyController.grantStock}">
+                                                    <h:outputText id="grandTotalBlock" value="#{pharmacyController.grandStock}">
                                                         <f:convertNumber integerOnly="true" />
                                                     </h:outputText>
                                                 </th>
@@ -801,7 +801,7 @@
                             <!-- Grand Total -->
                             <div class="alert alert-info">
                                 <h:outputText value="Total Stock: " styleClass="fw-bold"/>
-                                <h:outputText value="#{pharmacyController.grantStock}" styleClass="fw-bold">
+                                <h:outputText value="#{pharmacyController.grandStock}" styleClass="fw-bold">
                                     <f:convertNumber integerOnly="true" />
                                 </h:outputText>
                             </div>

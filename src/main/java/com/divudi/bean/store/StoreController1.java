@@ -82,7 +82,7 @@ public class StoreController1 implements Serializable {
     private AmpFacade ampFacade;
     ///////////
     private Item pharmacyItem;
-    // private double grantStock;
+    // private double grandStock;
     private Date fromDate;
     private Date toDate;
 
@@ -156,10 +156,10 @@ public class StoreController1 implements Serializable {
 
     }
 
-    private double grantStock;
+    private double grandStock;
 
-    public double getGrantStock() {
-        return grantStock;
+    public double getGrandStock() {
+        return grandStock;
 
     }
 
@@ -580,7 +580,7 @@ public class StoreController1 implements Serializable {
         List<Institution> insList = getCompany();
 
         institutionStocks = new ArrayList<>();
-        grantStock = 0;
+        grandStock = 0;
 
         for (Institution ins : insList) {
             InstitutionStock newTable = new InstitutionStock();
@@ -596,7 +596,7 @@ public class StoreController1 implements Serializable {
 
                 //Total Institution Stock
                 totalStock += r.getStock();
-                grantStock += r.getStock();
+                grandStock += r.getStock();
 
             }
 
@@ -1143,8 +1143,8 @@ public class StoreController1 implements Serializable {
         this.pos = pos;
     }
 
-    public void setGrantStock(double grantStock) {
-        this.grantStock = grantStock;
+    public void setGrandStock(double grandStock) {
+        this.grandStock = grandStock;
     }
 
     public double getGrantSaleQty() {
