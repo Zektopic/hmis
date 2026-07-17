@@ -909,9 +909,43 @@ public class BillService {
         if (b.getBillItems() == null || b.getBillItems().isEmpty()) {
             return;
         }
+
+        List<BillItem> itemsToFetchFees = new ArrayList<>();
         for (BillItem bi : b.getBillItems()) {
             if (bi.getBillFees() == null || bi.getBillFees().isEmpty()) {
-                bi.setBillFees(fetchBillFees(bi));
+                if (bi.getId() != null) {
+                    itemsToFetchFees.add(bi);
+                } else {
+                    bi.setBillFees(new ArrayList<>());
+                }
+            }
+        }
+
+        if (!itemsToFetchFees.isEmpty()) {
+            String jpql = "select bf from BillFee bf where bf.retired=:ret and bf.billItem in :bis";
+            Map<String, Object> params = new HashMap<>();
+            params.put("bis", itemsToFetchFees);
+            params.put("ret", false);
+            List<BillFee> fetchedFees = billFeeFacade.findByJpql(jpql, params);
+
+            Map<BillItem, List<BillFee>> feesMap = new HashMap<>();
+            for (BillFee fee : fetchedFees) {
+                if (fee.getBillItem() != null) {
+                    List<BillFee> list = feesMap.get(fee.getBillItem());
+                    if (list == null) {
+                        list = new ArrayList<>();
+                        feesMap.put(fee.getBillItem(), list);
+                    }
+                    list.add(fee);
+                }
+            }
+
+            for (BillItem bi : itemsToFetchFees) {
+                List<BillFee> fees = feesMap.get(bi);
+                if (fees == null) {
+                    fees = new ArrayList<>();
+                }
+                bi.setBillFees(fees);
             }
         }
     }
