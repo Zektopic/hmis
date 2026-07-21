@@ -46,14 +46,20 @@ public class PaysheetComponentSystemController implements Serializable {
     String selectText = "";
 
     public List<PaysheetComponent> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from PaysheetComponent c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String sql = "select c from PaysheetComponent c where c.retired=false and upper(c.name) like :q order by c.name";
+        HashMap<String, Object> hm = new HashMap<>();
+        hm.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, hm);
         return selectedItems;
     }
 
     public List<PaysheetComponent> completePaysheetComponent(String qry) {
         List<PaysheetComponent> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from PaysheetComponent c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            String sql = "select c from PaysheetComponent c where c.retired=false and upper(c.name) like :q order by c.name";
+            HashMap<String, Object> hm = new HashMap<>();
+            hm.put("q", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql(sql, hm);
         }
         if (a == null) {
             a = new ArrayList<PaysheetComponent>();
