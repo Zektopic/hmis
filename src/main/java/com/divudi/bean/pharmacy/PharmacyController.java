@@ -7959,20 +7959,40 @@ public class PharmacyController implements Serializable {
             JsfUtil.addErrorMessage("Nothing selected");
             return;
         }
-        List<Item> itemsToUpdate = new ArrayList<>();
+
+        List<Long> ids = new ArrayList<>();
         for (PharmaceuticalItemLight l : selectedLights) {
-            if (l.getId() == null) {
-                continue;
+            if (l.getId() != null) {
+                ids.add(l.getId());
             }
-            Item i = itemFacade.find(l.getId());
-            if (i == null) {
-                continue;
-            }
-            i.setRetired(true);
-            i.setRetirer(sessionController.getLoggedUser());
-            i.setRetiredAt(new Date());
-            itemsToUpdate.add(i);
         }
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        List<Item> itemsToUpdate = new ArrayList<>();
+
+        int batchSize = 500;
+        for (int i = 0; i < ids.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, ids.size());
+            List<Long> batchIds = ids.subList(i, end);
+
+            String jpql = "SELECT i FROM Item i WHERE i.id IN :ids";
+            Map<String, Object> params = new HashMap<>();
+            params.put("ids", batchIds);
+
+            List<Item> items = itemFacade.findByJpql(jpql, params);
+            if (items != null) {
+                for (Item item : items) {
+                    item.setRetired(true);
+                    item.setRetirer(sessionController.getLoggedUser());
+                    item.setRetiredAt(new Date());
+                    itemsToUpdate.add(item);
+                }
+            }
+        }
+
         itemFacade.batchEdit(itemsToUpdate);
         fillPharmaceuticalLights();
     }
