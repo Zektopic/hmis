@@ -162,11 +162,12 @@ public class AgencyController implements Serializable {
         } else {
             Map m = new HashMap();
             m.put("it", InstitutionType.Agency);
+            m.put("query", "%" + query.toUpperCase() + "%");
             sql = "select p from Institution p where"
                     + "  p.retired=false and "
                     + " p.institutionType=:it "
-                    + " and (((p.name) like '%" + query.toUpperCase() + "%') "
-                    + " or ((p.institutionCode) like '%" + query.toUpperCase() + "%') ) "
+                    + " and ((upper(p.name) like :query) "
+                    + " or (upper(p.institutionCode) like :query) ) "
                     + " order by p.name";
             //////// // System.out.println(sql);
             suggestions = getFacade().findByJpql(sql, m, 20);
@@ -175,7 +176,9 @@ public class AgencyController implements Serializable {
     }
 
     public List<Institution> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Institution c where c.retired=false and i.institutionType = com.divudi.core.data.InstitutionType.Agency and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        Map<String, Object> m = new HashMap<>();
+        m.put("selectText", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Institution c where c.retired=false and c.institutionType = com.divudi.core.data.InstitutionType.Agency and upper(c.name) like :selectText order by c.name", m);
         return selectedItems;
     }
 
