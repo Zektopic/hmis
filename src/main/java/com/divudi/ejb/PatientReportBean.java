@@ -136,13 +136,11 @@ public class PatientReportBean {
 
     public Double getDefaultDoubleValue(InvestigationItem item, Patient patient) {
 
-        // Returns default value by design
         return 0.0;
     }
 
     public String getDefaultVarcharValue(InvestigationItem item, Patient patient) {
 
-        // Returns default value by design
         return "";
     }
 
@@ -159,7 +157,6 @@ public class PatientReportBean {
 
     public byte[] getDefaultImageValue(InvestigationItem item, Patient patient) {
 
-        // Returns default value by design
         return null;
     }
     
