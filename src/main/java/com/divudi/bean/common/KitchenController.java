@@ -13,7 +13,9 @@ import com.divudi.core.entity.Department;
 import com.divudi.core.facade.DepartmentFacade;
 import java.io.Serializable;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.inject.Inject;
@@ -39,7 +41,9 @@ public class KitchenController implements Serializable {
     String selectText = "";
 
     public List<Department> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Department c where c.retired=false and i.departmentType = com.divudi.core.data.DepartmentType.Kitchen and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        Map<String, Object> m = new HashMap<>();
+        m.put("n", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Department c where c.retired=false and c.departmentType = com.divudi.core.data.DepartmentType.Kitchen and upper(c.name) like :n order by c.name", m);
         return selectedItems;
     }
 
