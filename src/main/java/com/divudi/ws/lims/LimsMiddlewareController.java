@@ -1606,6 +1606,32 @@ public class LimsMiddlewareController {
     }
 
 
+    public Double getDefaultDoubleValue(InvestigationItem item, Patient patient) {
+        //TODO: Create Logic
+        return 0.0;
+    }
+
+    public String getDefaultVarcharValue(InvestigationItem item, Patient patient) {
+        //TODO: Create Logic
+        return "";
+    }
+
+    public String getDefaultMemoValue(InvestigationItem item, Patient patient) {
+        String defaultValue = "";
+        if(item==null){
+            return defaultValue;
+        }
+        if(item.getHtmltext()!=null){
+            defaultValue=item.getHtmltext();
+        }
+        return defaultValue;
+    }
+
+    public byte[] getDefaultImageValue(InvestigationItem item, Patient patient) {
+        //TODO: Create Logic
+        return null;
+    }
+
     public String getPatientDynamicLabel(InvestigationItem ii, Patient p) {
         String dl;
         String sql;
