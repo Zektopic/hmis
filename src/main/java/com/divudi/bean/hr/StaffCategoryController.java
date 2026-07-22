@@ -15,7 +15,9 @@ import com.divudi.core.facade.StaffCategoryFacade;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -46,14 +48,18 @@ public class StaffCategoryController implements Serializable {
     String selectText = "";
 
     public List<StaffCategory> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from StaffCategory c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        Map<String, Object> params = new HashMap<>();
+        params.put("param", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from StaffCategory c where c.retired=false and upper(c.name) like :param order by c.name", params);
         return selectedItems;
     }
 
     public List<StaffCategory> completeStaffCategory(String qry) {
         List<StaffCategory> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from StaffCategory c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            Map<String, Object> params = new HashMap<>();
+            params.put("param", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql("select c from StaffCategory c where c.retired=false and upper(c.name) like :param order by c.name", params);
         }
         if (a == null) {
             a = new ArrayList<StaffCategory>();
