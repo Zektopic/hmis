@@ -318,51 +318,6 @@ public class MdInwardReportController implements Serializable {
 
     }
 
-    // TODO: delete fillAdmissions() — replaced by AdmissionReportController.fillAdmissions() (Issue #19640)
-//    public void fillAdmissions() {
-//        try {
-//            String sql;
-//            Map m = new HashMap();
-//
-//            sql = "select ad from Admission ad "
-//                    + " where ad.retired=false "
-//                    + " and ad.createdAt between :fd and :td ";
-//
-//            if (speciality != null) {
-//                sql += " and ad.referringConsultant.speciality=:s ";
-//                m.put("s", speciality);
-//            }
-//
-//            if (currentStaff != null) {
-//                sql += " and ad.referringConsultant=:cs";
-//                m.put("cs", currentStaff);
-//            }
-//
-//            if (admissionType != null) {
-//                sql += " and ad.admissionType=:admTp ";
-//                m.put("admTp", admissionType);
-//            }
-//            if (paymentMethod != null) {
-//                sql += " and ad.paymentMethod=:pm";
-//                m.put("pm", paymentMethod);
-//            }
-//            if (institution != null) {
-//                sql += " and ad.creditCompany=:cd";  // was incorrectly filtering creditCompany
-//                m.put("cd", institution);
-//            }
-//
-//            sql += " order by ad.createdAt ASC ";
-//
-//            m.put("fd", fromDate);
-//            m.put("td", toDate);
-//
-//            admissions = admissionFacade.findByJpql(sql, m, TemporalType.TIMESTAMP);
-//
-//        } catch (Exception e) {
-//            JsfUtil.addErrorMessage("Error loading admissions: " + e.getMessage());
-//        }
-//    }
-
     public void createServiceBillsByDischargeDate() {
         Date startTime = new Date();
 
