@@ -3472,13 +3472,16 @@ public class BookingControllerViewScopeMonth implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
+            Map<String, Object> m = new HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
             if (getSpeciality() != null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q) and p.speciality = :sp order by p.person.name";
+                m.put("sp", getSpeciality());
             } else {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q) order by p.person.name";
             }
             ////System.out.println(sql);
-            suggestions = getStaffFacade().findByJpql(sql);
+            suggestions = getStaffFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
