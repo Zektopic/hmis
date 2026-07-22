@@ -20,10 +20,14 @@ import javax.ws.rs.core.Response;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Path("payment-scheme")
 @RequestScoped
 public class PaymentSchemeApi {
+
+    private static final Logger LOGGER = Logger.getLogger(PaymentSchemeApi.class.getName());
 
     @Context
     private HttpServletRequest requestContext;
@@ -49,7 +53,11 @@ public class PaymentSchemeApi {
             String limitStr = requestContext.getParameter("limit");
             int limit = 500;
             if (limitStr != null && !limitStr.trim().isEmpty()) {
-                try { limit = Integer.parseInt(limitStr.trim()); } catch (NumberFormatException ignored) {}
+                try {
+                    limit = Integer.parseInt(limitStr.trim());
+                } catch (NumberFormatException e) {
+                    LOGGER.log(Level.WARNING, "Invalid limit parameter: {0}, falling back to default 500", limitStr);
+                }
             }
             limit = Math.max(1, Math.min(limit, 1000));
 
