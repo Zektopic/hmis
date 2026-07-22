@@ -9,12 +9,17 @@ import com.divudi.core.entity.ServiceSession;
 import com.divudi.core.entity.channel.ArrivalRecord;
 import com.divudi.core.entity.hr.FingerPrintRecord;
 import com.divudi.core.facade.FingerPrintRecordFacade;
+import com.divudi.core.entity.Staff;
+import com.divudi.core.data.PersonInstitutionType;
+import com.divudi.core.facade.StaffFacade;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -27,6 +32,7 @@ public class StockHistoryRecorderTest {
     private StockHistoryRecorder recorder;
     private MockStockFacade mockStockFacade;
     private MockFingerPrintRecordFacade mockFacade;
+    private MockStaffFacade mockStaffFacade;
 
     @BeforeEach
     public void setUp() {
@@ -35,6 +41,46 @@ public class StockHistoryRecorderTest {
         recorder.setStockFacade(mockStockFacade);
         mockFacade = new MockFingerPrintRecordFacade();
         recorder.fingerPrintRecordFacade = mockFacade;
+        mockStaffFacade = new MockStaffFacade();
+        recorder.staffFacade = mockStaffFacade;
+    }
+
+    @Test
+    public void testStaffs_ReturnsListFromFacade() {
+        // Arrange
+        List<Staff> mockList = new ArrayList<>();
+        Staff staff1 = new Staff();
+        staff1.setId(1L);
+        mockList.add(staff1);
+        mockStaffFacade.setMockResult(mockList);
+
+        // Act
+        List<Staff> result = recorder.staffs();
+
+        // Assert
+        assertEquals(mockList, result, "Should return the list from the mock facade");
+
+        String expectedSql = " select pi.staff from PersonInstitution pi where pi.retired=false "
+                + " and pi.type=:typ "
+                + " order by pi.staff.person.name ";
+        assertEquals(expectedSql, mockStaffFacade.getLastJpql(), "JPQL should match");
+
+        Map<String, Object> params = mockStaffFacade.getLastParams();
+        assertNotNull(params, "Parameters map should not be null");
+        assertEquals(1, params.size(), "Should have exactly one parameter");
+        assertEquals(PersonInstitutionType.Channelling, params.get("typ"), "PersonInstitutionType should be Channelling");
+    }
+
+    @Test
+    public void testStaffs_ReturnsNullWhenFacadeReturnsNull() {
+        // Arrange
+        mockStaffFacade.setMockResult(null);
+
+        // Act
+        List<Staff> result = recorder.staffs();
+
+        // Assert
+        assertNull(result, "Should return null if facade returns null");
     }
 
     @Test
@@ -179,6 +225,31 @@ public class StockHistoryRecorderTest {
             this.lastJpql = jpql;
             this.lastParams = parameters;
             return (FingerPrintRecord) (Object) mockResult;
+        }
+    }
+
+    private class MockStaffFacade extends StaffFacade {
+        private List<Staff> mockResult = null;
+        private String lastJpql = null;
+        private Map<String, Object> lastParams = null;
+
+        public void setMockResult(List<Staff> mockResult) {
+            this.mockResult = mockResult;
+        }
+
+        public String getLastJpql() {
+            return lastJpql;
+        }
+
+        public Map<String, Object> getLastParams() {
+            return lastParams;
+        }
+
+        @Override
+        public List<Staff> findByJpql(String jpql, Map<String, Object> parameters) {
+            this.lastJpql = jpql;
+            this.lastParams = parameters;
+            return mockResult;
         }
     }
 }
