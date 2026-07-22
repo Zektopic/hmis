@@ -664,13 +664,16 @@ public class PastBookingController implements Serializable, ControllerWithPatien
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
+            Map m = new HashMap();
             if (getSpeciality() != null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q ) and p.speciality.id = :sId order by p.person.name";
+                m.put("sId", getSpeciality().getId());
             } else {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q ) order by p.person.name";
             }
+            m.put("q", "%" + query.toUpperCase() + "%");
             ////System.out.println(sql);
-            suggestions = getStaffFacade().findByJpql(sql);
+            suggestions = getStaffFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
