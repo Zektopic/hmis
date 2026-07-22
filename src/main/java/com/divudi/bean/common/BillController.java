@@ -663,8 +663,10 @@ public class BillController implements Serializable, ControllerWithMultiplePayme
 //        this.recurseCount = recurseCount;
 //    }
     public boolean findByFilter(String property, String value) {
-        String sql = "Select b From Bill b where b.retired=false and (b." + property + ") like '%" + value.toUpperCase() + " %'";
-        Bill b = getBillFacade().findFirstByJpql(sql);
+        String sql = "Select b From Bill b where b.retired=false and upper(b." + property + ") like :val";
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        map.put("val", "%" + value.toUpperCase() + " %");
+        Bill b = getBillFacade().findFirstByJpql(sql, map);
         if (b != null) {
             return true;
         } else {
