@@ -2147,7 +2147,7 @@ public class PharmacyController implements Serializable {
 
     public void clearItemHistory() {
 
-        grantStock = 0.00;
+        grandStock = 0.00;
         grantSaleQty = 0.00;
         grantSaleValue = 0.00;
         grantWholeSaleQty = 0.00;
@@ -8477,10 +8477,10 @@ public class PharmacyController implements Serializable {
 
     }
 
-    private double grantStock; // TODO: This is a typo. Will correct in later iterations
+    private double grandStock; // TODO: This is a typo. Will correct in later iterations
 
-    public double getGrantStock() { // TODO: This is a typo. Will correct in later iterations
-        return grantStock;
+    public double getGrandStock() { // TODO: This is a typo. Will correct in later iterations
+        return grandStock;
     }
 
     public double getTransferIssueValueByInstitution(Institution toIns, Item i) {
@@ -9448,7 +9448,7 @@ public class PharmacyController implements Serializable {
         List<Institution> insList = getCompany();
 
         institutionStocks = new ArrayList<>();
-        grantStock = 0;
+        grandStock = 0;
 
         for (Institution ins : insList) {
             InstitutionStock newTable = new InstitutionStock();
@@ -9472,7 +9472,7 @@ public class PharmacyController implements Serializable {
 
                 //Total Institution Stock
                 totalStock += r.getStock();
-                grantStock += r.getStock();
+                grandStock += r.getStock();
 
             }
 
@@ -9497,7 +9497,7 @@ public class PharmacyController implements Serializable {
         departmentStockDtos = new ArrayList<>();
         institutionTotals = new HashMap<>();
         displayedInstitutionIds = new HashSet<>(); // Reset for fresh display
-        grantStock = 0;
+        grandStock = 0;
         Item stockItem;
         if (pharmacyItem instanceof Ampp) {
             stockItem = ((Ampp) pharmacyItem).getAmp();
@@ -9519,12 +9519,12 @@ public class PharmacyController implements Serializable {
             departmentStockDtos = (List<com.divudi.core.data.dto.PharmacyDepartmentStockDTO>) getBillItemFacade().findLightsByJpql(sql, parameters);
             for (com.divudi.core.data.dto.PharmacyDepartmentStockDTO dto : departmentStockDtos) {
                 if (dto.getQty() != null) {
-                    grantStock += dto.getQty();
+                    grandStock += dto.getQty();
                 }
             }
         } catch (Exception e) {
             departmentStockDtos = new ArrayList<>();
-            grantStock = 0;
+            grandStock = 0;
         }
     }
 
@@ -11779,8 +11779,8 @@ public class PharmacyController implements Serializable {
         this.pos = pos;
     }
 
-    public void setGrantStock(double grantStock) {
-        this.grantStock = grantStock;
+    public void setGrandStock(double grandStock) {
+        this.grandStock = grandStock;
     }
 
     public double getGrantSaleQty() {
