@@ -778,13 +778,6 @@ public class ServiceSummery implements Serializable {
 //        billFees = getBillFeeFacade().findByJpql(sql, m, 100);
 
         for (BillFee bf : billFees) {
-
-            //// // System.out.println("bf.getBillItem().getBill().getInsId() = " + bf.getBillItem().getBill().getInsId());
-            sql = "Select f from ItemFee f where f.id = " + bf.getFee().getId();
-            ItemFee itemFee = itemFeeFacade.findFirstByJpql(sql);
-
-            if (itemFee != null) {
-            }
             bf.getFee().setFeeType(FeeType.OwnInstitution);
             feeFacade.edit(bf.getFee());
         }
