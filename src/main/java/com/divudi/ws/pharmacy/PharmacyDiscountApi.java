@@ -21,10 +21,14 @@ import javax.ws.rs.core.Response;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Path("pharmacy/discounts")
 @RequestScoped
 public class PharmacyDiscountApi {
+
+    private static final Logger LOGGER = Logger.getLogger(PharmacyDiscountApi.class.getName());
 
     @Context
     private HttpServletRequest requestContext;
@@ -53,11 +57,19 @@ public class PharmacyDiscountApi {
 
             Long psId = null;
             if (psIdStr != null && !psIdStr.trim().isEmpty()) {
-                try { psId = Long.parseLong(psIdStr.trim()); } catch (NumberFormatException ignored) {}
+                try {
+                    psId = Long.parseLong(psIdStr.trim());
+                } catch (NumberFormatException ignored) {
+                    LOGGER.log(Level.WARNING, "Invalid paymentSchemeId format: {0}", psIdStr);
+                }
             }
             int limit = 200;
             if (limitStr != null && !limitStr.trim().isEmpty()) {
-                try { limit = Integer.parseInt(limitStr.trim()); } catch (NumberFormatException ignored) {}
+                try {
+                    limit = Integer.parseInt(limitStr.trim());
+                } catch (NumberFormatException ignored) {
+                    LOGGER.log(Level.WARNING, "Invalid limit format: {0}", limitStr);
+                }
             }
 
             return successResponse(discountService.list(psId, psName, billType, limit));
