@@ -59,16 +59,18 @@ public class PharmacyDiscountApi {
             if (psIdStr != null && !psIdStr.trim().isEmpty()) {
                 try {
                     psId = Long.parseLong(psIdStr.trim());
-                } catch (NumberFormatException ignored) {
-                    LOGGER.log(Level.WARNING, "Invalid paymentSchemeId format: {0}", psIdStr);
+
+                } catch (NumberFormatException e) {
+                    LOGGER.log(Level.WARNING, "Invalid paymentSchemeId: " + psIdStr, e);
                 }
             }
             int limit = 200;
             if (limitStr != null && !limitStr.trim().isEmpty()) {
                 try {
                     limit = Integer.parseInt(limitStr.trim());
-                } catch (NumberFormatException ignored) {
-                    LOGGER.log(Level.WARNING, "Invalid limit format: {0}", limitStr);
+
+                } catch (NumberFormatException e) {
+                    LOGGER.log(Level.WARNING, "Invalid limit: " + limitStr, e);
                 }
             }
 
