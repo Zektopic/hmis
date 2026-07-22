@@ -22,6 +22,7 @@ import com.divudi.ejb.EjbApplication;
 import com.divudi.ejb.PharmacyBean;
 
 import com.divudi.core.entity.Bill;
+import com.divudi.core.entity.AuditEvent;
 import com.divudi.core.entity.BillComponent;
 import com.divudi.core.entity.BillEntry;
 import com.divudi.core.entity.BillFee;
@@ -2091,31 +2092,6 @@ public class OpdBillCancellationController implements Serializable, ControllerWi
         try {
             // Save the updated bill
             billFacade.edit(batchBill);
-            // Create audit log entry after successful update (commented out - needs auditEventApplicationController)
-            // TODO: Add audit trail logging when auditEventApplicationController is available
-            /*
-            auditEventApplicationController.logAuditEvent(
-            "Individual Bill Cancellation - Batch Bill Balance Adjustment",
-            String.format(
-            "Batch Bill: %s | Individual Bill: %s | Cancellation Bill: %s | " +
-            "Old Balance: %.2f → New Balance: %.2f | Refund: +%.2f | " +
-            "Old Paid: %.2f → New Paid: %.2f | Old Refund: %.2f → New Refund: %.2f | " +
-            "Adjusted By: %s",
-            batchBill.getInsId(),
-            individualBill.getInsId(),
-            cancellationBill.getInsId(),
-            oldBalance, batchBill.getBalance(),
-            refundAmount,
-            oldPaidAmount, batchBill.getPaidAmount(),
-            oldRefundAmount, batchBill.getRefundAmount(),
-            sessionController.getLoggedUser().getName()
-            ),
-            batchBill
-            );
-             */
-            // Create audit log entry after successful update (commented out - needs auditEventApplicationController)
-            // TODO: Add audit trail logging when auditEventApplicationController is available
-            /*
             auditEventApplicationController.logAuditEvent(
                 "Individual Bill Cancellation - Batch Bill Balance Adjustment",
                 String.format(
@@ -2134,7 +2110,6 @@ public class OpdBillCancellationController implements Serializable, ControllerWi
                 ),
                 batchBill
             );
-             */
 
         } catch (Exception e) {
             JsfUtil.addErrorMessage("Error updating batch bill balance: " + e.getMessage());

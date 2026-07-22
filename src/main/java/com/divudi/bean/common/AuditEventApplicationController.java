@@ -47,6 +47,17 @@ public class AuditEventApplicationController {
         executorService.shutdownNow();
     }
 
+
+    public void logAuditEvent(String eventTrigger, String json, com.divudi.core.entity.Bill bill) {
+        AuditEvent event = new AuditEvent();
+        event.setEventTrigger(eventTrigger);
+        event.setAfterJson(json);
+        if (bill != null) {
+            event.setObjectId(bill.getId());
+            event.setEntityType("Bill");
+        }
+        logAuditEvent(event);
+    }
     public void logAuditEvent(AuditEvent event) {
         try {
             eventQueue.put(event);
