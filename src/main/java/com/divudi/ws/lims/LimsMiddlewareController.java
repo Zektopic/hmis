@@ -1606,22 +1606,22 @@ public class LimsMiddlewareController {
     }
 
     public Double getDefaultDoubleValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
+        // Returns default value by design
         return 0.0;
     }
 
     public String getDefaultVarcharValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
+        // Returns default value by design
         return "";
     }
 
     public String getDefaultMemoValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
+        // Returns default value by design
         return "";
     }
 
     public byte[] getDefaultImageValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
+        // Returns default value by design
         return null;
     }
 

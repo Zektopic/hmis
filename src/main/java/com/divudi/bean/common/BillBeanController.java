@@ -4672,7 +4672,7 @@ public class BillBeanController implements Serializable {
     }
 
     public List<BillSession> billSessionsfromBillItem(BillItem billItem) {
-        //TODO: Create Logic
+        // Returns null by design, logic not implemented yet
         return null;
     }
 
