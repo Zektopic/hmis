@@ -32,6 +32,7 @@ import com.divudi.core.entity.Institution;
 import com.divudi.core.entity.Payment;
 import com.divudi.core.entity.RefundBill;
 import com.divudi.core.entity.WebUser;
+import com.divudi.core.entity.AuditEvent;
 import com.divudi.core.entity.lab.PatientInvestigation;
 import com.divudi.core.entity.pharmacy.PharmaceuticalBillItem;
 import com.divudi.core.facade.AgentHistoryFacade;
@@ -2091,50 +2092,17 @@ public class OpdBillCancellationController implements Serializable, ControllerWi
         try {
             // Save the updated bill
             billFacade.edit(batchBill);
-            // Create audit log entry after successful update (commented out - needs auditEventApplicationController)
-            // TODO: Add audit trail logging when auditEventApplicationController is available
-            /*
-            auditEventApplicationController.logAuditEvent(
-            "Individual Bill Cancellation - Batch Bill Balance Adjustment",
-            String.format(
-            "Batch Bill: %s | Individual Bill: %s | Cancellation Bill: %s | " +
-            "Old Balance: %.2f → New Balance: %.2f | Refund: +%.2f | " +
-            "Old Paid: %.2f → New Paid: %.2f | Old Refund: %.2f → New Refund: %.2f | " +
-            "Adjusted By: %s",
-            batchBill.getInsId(),
-            individualBill.getInsId(),
-            cancellationBill.getInsId(),
-            oldBalance, batchBill.getBalance(),
-            refundAmount,
-            oldPaidAmount, batchBill.getPaidAmount(),
-            oldRefundAmount, batchBill.getRefundAmount(),
-            sessionController.getLoggedUser().getName()
-            ),
-            batchBill
-            );
-             */
-            // Create audit log entry after successful update (commented out - needs auditEventApplicationController)
-            // TODO: Add audit trail logging when auditEventApplicationController is available
-            /*
-            auditEventApplicationController.logAuditEvent(
-                "Individual Bill Cancellation - Batch Bill Balance Adjustment",
-                String.format(
-                    "Batch Bill: %s | Individual Bill: %s | Cancellation Bill: %s | " +
-                    "Old Balance: %.2f → New Balance: %.2f | Refund: +%.2f | " +
-                    "Old Paid: %.2f → New Paid: %.2f | Old Refund: %.2f → New Refund: %.2f | " +
-                    "Adjusted By: %s",
-                    batchBill.getInsId(),
-                    individualBill.getInsId(),
-                    cancellationBill.getInsId(),
-                    oldBalance, batchBill.getBalance(),
-                    refundAmount,
-                    oldPaidAmount, batchBill.getPaidAmount(),
-                    oldRefundAmount, batchBill.getRefundAmount(),
-                    sessionController.getLoggedUser().getName()
-                ),
-                batchBill
-            );
-             */
+            // Create audit log entry after successful update
+            AuditEvent auditEvent = new AuditEvent();
+            auditEvent.setEventTrigger("Individual Bill Cancellation - Batch Bill Balance Adjustment");
+            auditEvent.setBeforeJson(String.format("Old Balance: %.2f, Old Paid: %.2f, Old Refund: %.2f", oldBalance, oldPaidAmount, oldRefundAmount));
+            auditEvent.setAfterJson(String.format("New Balance: %.2f, New Paid: %.2f, New Refund: %.2f, Refund Amount: +%.2f", batchBill.getBalance(), batchBill.getPaidAmount(), batchBill.getRefundAmount(), refundAmount));
+            auditEvent.setInstitutionId(batchBill.getInstitution() != null ? batchBill.getInstitution().getId() : null);
+            auditEvent.setDepartmentId(batchBill.getDepartment() != null ? batchBill.getDepartment().getId() : null);
+            auditEvent.setWebUserId(sessionController.getLoggedUser() != null ? sessionController.getLoggedUser().getId() : null);
+            auditEvent.setObjectId(batchBill.getId());
+            auditEvent.setEventDataTime(new Date());
+            auditEventApplicationController.logAuditEvent(auditEvent);
 
         } catch (Exception e) {
             JsfUtil.addErrorMessage("Error updating batch bill balance: " + e.getMessage());
