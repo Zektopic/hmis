@@ -2791,6 +2791,7 @@ public class ItemController implements Serializable {
 
             tmpMap.put("amp", Amp.class);
             tmpMap.put("ampp", Ampp.class);
+            tmpMap.put("q", "%" + query.toUpperCase() + "%");
             tmpMap.put("dts", sessionController.getAvailableDepartmentTypesForPharmacyTransactions());
             tmpMap.put("q", "%" + query.toUpperCase() + "%");
             suggestions = getFacade().findByJpql(sql, tmpMap, TemporalType.TIMESTAMP, 30);
@@ -2834,6 +2835,7 @@ public class ItemController implements Serializable {
 
             tmpMap.put("amp", Amp.class);
             tmpMap.put("ampp", Ampp.class);
+            tmpMap.put("q", "%" + query.toUpperCase() + "%");
             tmpMap.put("dts", lstDepartmentTypes);
             tmpMap.put("q", "%" + query.toUpperCase() + "%");
             suggestions = getFacade().findByJpql(sql, tmpMap, TemporalType.TIMESTAMP, 30);
@@ -3137,6 +3139,7 @@ public class ItemController implements Serializable {
     public List<Item> completePackage(String query) {
         List<Item> suggestions;
         String sql;
+        HashMap hm = new HashMap();
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
@@ -3144,9 +3147,9 @@ public class ItemController implements Serializable {
                     + " and (c.inactive=false or c.inactive is null) "
                     + "and type(c)=Packege "
                     + "and upper(c.name) like :q order by c.name";
-            HashMap m = new HashMap();
-            m.put("q", "%" + query.toUpperCase() + "%");
-            suggestions = getFacade().findByJpql(sql, m);
+
+            hm.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, hm);
         }
         return suggestions;
 
@@ -3224,6 +3227,7 @@ public class ItemController implements Serializable {
     public List<Item> completeMedicalPackage(String query) {
         List<Item> suggestions;
         String sql;
+        HashMap hm = new HashMap();
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
@@ -3231,9 +3235,9 @@ public class ItemController implements Serializable {
                     + " and (c.inactive=false or c.inactive is null) "
                     + "and type(c)=MedicalPackage "
                     + "and upper(c.name) like :q order by c.name";
-            HashMap m = new HashMap();
-            m.put("q", "%" + query.toUpperCase() + "%");
-            suggestions = getFacade().findByJpql(sql, m);
+
+            hm.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, hm);
         }
         return suggestions;
 
@@ -3700,15 +3704,14 @@ public class ItemController implements Serializable {
     public List<Item> completeItemWithoutPackOwn(String query) {
         List<Item> suggestions;
         String sql;
+        HashMap hm = new HashMap();
         if (query == null) {
             suggestions = new ArrayList<Item>();
         } else {
-            sql = "select c from Item c where c.institution = :ins and c.retired=false and type(c)!=Packege and type(c)!=TimedItem and upper(c.name) like :q order by c.name";
 
-            HashMap m = new HashMap();
-            m.put("ins", getSessionController().getInstitution());
-            m.put("q", "%" + query.toUpperCase() + "%");
-            suggestions = getFacade().findByJpql(sql, m);
+            sql = "select c from Item c where c.institution.id = " + getSessionController().getInstitution().getId() + " and c.retired=false and type(c)!=Packege and type(c)!=TimedItem and upper(c.name) like :q order by c.name";
+            hm.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, hm);
         }
         return suggestions;
     }
