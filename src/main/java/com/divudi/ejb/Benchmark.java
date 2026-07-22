@@ -43,7 +43,11 @@ public class Benchmark {
     }
 
     private static void simulateDbInsert() {
-        try { Thread.sleep(1); } catch (Exception e) {} // Simulate DB latency
+        try {
+            Thread.sleep(1);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } // Simulate DB latency
     }
 
     private static void simulateBatchDbInsert() {
@@ -51,6 +55,10 @@ public class Benchmark {
     }
 
     private static void simulateBatchFlush() {
-        try { Thread.sleep(5); } catch (Exception e) {} // Simulate DB latency for batch
+        try {
+            Thread.sleep(5);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } // Simulate DB latency for batch
     }
 }
