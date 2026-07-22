@@ -15,7 +15,9 @@ import com.divudi.core.facade.LoanFacade;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -49,14 +51,18 @@ public class LoanController implements Serializable {
     }
 
     public List<Loan> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Loan c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        Map<String, Object> m = new HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Loan c where c.retired=false and upper(c.name) like :q order by c.name", m);
         return selectedItems;
     }
 
     public List<Loan> completeLoan(String qry) {
         List<Loan> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from Loan c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            Map<String, Object> m = new HashMap<>();
+            m.put("q", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql("select c from Loan c where c.retired=false and upper(c.name) like :q order by c.name", m);
         }
         if (a == null) {
             a = new ArrayList<Loan>();
