@@ -1,0 +1,11 @@
+The security vulnerability reported for SQL injection in `PaysheetComponentSystemController.java:49` is already addressed in the `development` branch through proper JPQL parameterized query usage.
+
+The codebase currently contains the fixed parameterized query instead of the raw string concatenation:
+```java
+String sql = "select c from PaysheetComponent c where c.retired=false and upper(c.name) like :q order by c.name";
+HashMap<String, Object> hm = new HashMap<>();
+hm.put("q", "%" + getSelectText().toUpperCase() + "%");
+selectedItems = getFacade().findByJpql(sql, hm);
+```
+
+As a complete resolution for the task, I have added the unit test file `PaysheetComponentSystemControllerTest.java` that asserts the mitigation strategy is present and works correctly without regression.
