@@ -1086,41 +1086,6 @@ public class ChannelBean {
         return sessionNumberGenerator;
     }
 
-//
-//    public List<ServiceSession> generateServiceSessionsForSelectedDate(List<ServiceSession> inputSessions, Date date) {
-//        int sessionDayCount = 0;
-//        List<ServiceSession> createdSessions = new ArrayList<>();
-//
-//        if (inputSessions == null || inputSessions.isEmpty()) {
-//            return createdSessions;
-//        }
-//
-//        Integer tmp = 0;
-//        int rowIndex = 0;
-//
-//        for (ServiceSession ss : inputSessions) {
-//            ServiceSession newSs = new ServiceSession();
-//            newSs.setOriginatingSession(ss);
-//            newSs.setName(ss.getName());
-//            newSs.setMaxNo(ss.getMaxNo());
-//            newSs.setStartingTime(ss.getStartingTime());
-//            newSs.setSessionWeekday(ss.getSessionWeekday());
-//            newSs.setHospitalFee(ss.getHospitalFee());
-//            newSs.setProfessionalFee(ss.getProfessionalFee());
-//            newSs.setId(ss.getId());
-//            newSs.setSessionAt(date);
-//            newSs.setSessionDate(date);
-//            newSs.setDisplayCount(getBillSessionsCount(ss, date));
-//            newSs.setStaff(ss.getStaff());
-//            //Temprory
-//            newSs.setRoomNo(rowIndex++);
-//            //////System.out.println("Specific Count : " + sessionDayCount);
-//            createdSessions.add(newSs);
-//
-//        }
-//        return createdSessions;
-//    }
-//
     public Date calSessionTime(ServiceSession serviceSession) {
         Calendar starting = Calendar.getInstance();
         starting.setTime(serviceSession.getStartingTime());
