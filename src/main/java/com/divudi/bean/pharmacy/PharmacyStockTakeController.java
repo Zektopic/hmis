@@ -4444,7 +4444,11 @@ public class PharmacyStockTakeController implements Serializable {
             }
 
             for (int i = 0; i < col; i++) {
-                try { sheet.autoSizeColumn(i); } catch (Exception ignored) {}
+                try {
+                    sheet.autoSizeColumn(i);
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Error auto-sizing column " + i, e);
+                }
             }
 
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
