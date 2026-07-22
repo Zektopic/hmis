@@ -58,7 +58,8 @@ import javax.inject.Named;
 @SessionScoped
 public class DirectPurchaseReturnController implements Serializable {
 
-    private static final Logger LOGGER = Logger.getLogger(DirectPurchaseReturnController.class.getName());
+
+    private static final Logger logger = Logger.getLogger(DirectPurchaseReturnController.class.getName());
 
     /**
      * EJBs
@@ -467,7 +468,8 @@ public class DirectPurchaseReturnController implements Serializable {
             if (!returnFlag) {
                 getPharmaceuticalBillItemFacade().edit(pbi);
                 getBillItemFacade().edit(i);
-                LOGGER.log(Level.SEVERE, "Return flag is false. Failed to deduct from stock for pharmaceutical bill item id: {0}", pbi.getId());
+
+                logger.log(Level.SEVERE, "Stock deduction failed for BillItem: {0}", i.getId());
             }
 
             saveBillFee(i);
