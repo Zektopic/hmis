@@ -1605,26 +1605,6 @@ public class LimsMiddlewareController {
         return r;
     }
 
-    public Double getDefaultDoubleValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
-        return 0.0;
-    }
-
-    public String getDefaultVarcharValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
-        return "";
-    }
-
-    public String getDefaultMemoValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
-        return "";
-    }
-
-    public byte[] getDefaultImageValue(InvestigationItem item, Patient patient) {
-        //TODO: Create Logic
-        return null;
-    }
-
     public String getPatientDynamicLabel(InvestigationItem ii, Patient p) {
         String dl;
         String sql;
