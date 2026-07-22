@@ -1805,13 +1805,16 @@ public class BookingController implements Serializable, ControllerWithPatient, C
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
+            Map<String, Object> m = new HashMap<>();
+            m.put("query", "%" + query.toUpperCase() + "%");
             if (getSpeciality() != null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query) and p.speciality.id = :specialityId order by p.person.name";
+                m.put("specialityId", getSpeciality().getId());
             } else {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query) order by p.person.name";
             }
             ////System.out.println(sql);
-            suggestions = getStaffFacade().findByJpql(sql);
+            suggestions = getStaffFacade().findByJpql(sql, m);
         }
         return suggestions;
     }

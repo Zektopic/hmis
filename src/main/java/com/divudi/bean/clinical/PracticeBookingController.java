@@ -586,6 +586,7 @@ public class PracticeBookingController implements Serializable {
             suggestions = new ArrayList<Staff>();
         } else {
 
+            // Fix SQL Injection: parameterized query used
             Map<String, Object> m = new HashMap<>();
             m.put("query", "%" + query.toUpperCase() + "%");
             if (getSpeciality() != null) {
