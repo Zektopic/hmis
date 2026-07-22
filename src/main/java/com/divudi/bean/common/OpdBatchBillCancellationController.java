@@ -664,6 +664,9 @@ public class OpdBatchBillCancellationController implements Serializable, Control
 //        this.recurseCount = recurseCount;
 //    }
     public boolean findByFilter(String property, String value) {
+        if (property == null || !property.matches("^[a-zA-Z0-9_\\.]+$")) {
+            return false;
+        }
         String sql = "Select b From Bill b where b.retired=false and upper(b." + property + ") like :val";
 
         java.util.Map<String, Object> hm = new java.util.HashMap<>();
