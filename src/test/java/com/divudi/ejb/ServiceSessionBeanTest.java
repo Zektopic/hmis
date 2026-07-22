@@ -6,17 +6,17 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class ServiceSessionBeanTest {
 
     private ServiceSessionBean serviceSessionBean;
+    private ServiceSession serviceSession;
 
     @BeforeEach
     public void setUp() {
         serviceSessionBean = new ServiceSessionBean();
+        serviceSession = new ServiceSession();
     }
 
     @Test
@@ -61,9 +61,6 @@ public class ServiceSessionBeanTest {
     public void testStringNumbersToIntsContainsGreaterThanWithFloat() {
         ServiceSession ss = new ServiceSession();
         List<Integer> result = serviceSessionBean.stringNumbersToInts("> 5.5", ss);
-        // The parser parses 5.5 as 5, or maybe fails to parse and defaults to 1.
-        // In our manual test, "> 5.5" parsed as 1 because '5.5' is not fully numeric under integer parsing constraints without trailing error handling.
-        // Let's verify what it returns exactly (manual test returned 1, so 1+1=2, 2 to 100).
         assertEquals(99, result.size());
         assertEquals(2, result.get(0));
     }
@@ -72,7 +69,42 @@ public class ServiceSessionBeanTest {
     public void testStringNumbersToIntsContainsGreaterThanWithNonNumeric() {
         ServiceSession ss = new ServiceSession();
         List<Integer> result = serviceSessionBean.stringNumbersToInts("> ABC", ss);
-        // "ABC" is not numeric, so it doesn't trigger the addToIntList inside the if (isNumeric(s))
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    public void testStringNumbersToInts_NullString_StartingNoGreaterThanZero() {
+        serviceSession.setStartingNo(50);
+        List<Integer> result = serviceSessionBean.stringNumbersToInts(null, serviceSession);
+        assertNotNull(result);
+        assertEquals(51, result.size());
+        assertEquals(50, result.get(0));
+        assertEquals(100, result.get(result.size() - 1));
+    }
+
+    @Test
+    public void testStringNumbersToInts_EmptyString_StartingNoZero() {
+        serviceSession.setStartingNo(0);
+        List<Integer> result = serviceSessionBean.stringNumbersToInts("   ", serviceSession);
+        assertNotNull(result);
+        assertEquals(100, result.size());
+        assertEquals(1, result.get(0));
+        assertEquals(100, result.get(result.size() - 1));
+    }
+
+    @Test
+    public void testStringNumbersToInts_ContainsGreaterThan() {
+        List<Integer> result = serviceSessionBean.stringNumbersToInts("> 50", serviceSession);
+        assertNotNull(result);
+        assertEquals(50, result.size());
+        assertEquals(51, result.get(0));
+        assertEquals(100, result.get(result.size() - 1));
+    }
+
+    @Test
+    public void testStringNumbersToInts_ContainsGreaterThan_InvalidNumber() {
+        List<Integer> result = serviceSessionBean.stringNumbersToInts("> abc", serviceSession);
+        assertNotNull(result);
         assertTrue(result.isEmpty());
     }
 
@@ -89,7 +121,6 @@ public class ServiceSessionBeanTest {
     public void testStringNumbersToIntsContainsDashWithFloat() {
         ServiceSession ss = new ServiceSession();
         List<Integer> result = serviceSessionBean.stringNumbersToInts("5.5 - 10.5", ss);
-        // The first float parses/fails to 1, second parses/fails to 1. Returns 1 to 1.
         assertEquals(1, result.size());
         assertEquals(1, result.get(0));
     }
@@ -97,16 +128,30 @@ public class ServiceSessionBeanTest {
     @Test
     public void testStringNumbersToIntsContainsDashMissingSecond() {
         ServiceSession ss = new ServiceSession();
-        // NullPointerException expected since fromNo is assigned, toNo remains null
         assertThrows(NullPointerException.class, () -> {
             serviceSessionBean.stringNumbersToInts("5 - ", ss);
         });
     }
 
     @Test
+    public void testStringNumbersToInts_ContainsHyphen() {
+        List<Integer> result = serviceSessionBean.stringNumbersToInts("10 - 20", serviceSession);
+        assertNotNull(result);
+        assertEquals(11, result.size());
+        assertEquals(10, result.get(0));
+        assertEquals(20, result.get(result.size() - 1));
+    }
+
+    @Test
+    public void testStringNumbersToInts_ContainsHyphen_InvalidNumbers() {
+        assertThrows(NullPointerException.class, () -> {
+            serviceSessionBean.stringNumbersToInts("abc - def", serviceSession);
+        });
+    }
+
+    @Test
     public void testStringNumbersToIntsContainsDashMissingFirst() {
         ServiceSession ss = new ServiceSession();
-        // NullPointerException expected since fromNo is assigned (as the single number becomes fromNo), toNo remains null
         assertThrows(NullPointerException.class, () -> {
             serviceSessionBean.stringNumbersToInts("- 10", ss);
         });
@@ -120,7 +165,14 @@ public class ServiceSessionBeanTest {
 
     @Test
     public void testIsNumericInvalid() {
-        assertTrue(!ServiceSessionBean.isNumeric("ABC"));
-        assertTrue(!ServiceSessionBean.isNumeric("12A"));
+        assertFalse(ServiceSessionBean.isNumeric("ABC"));
+        assertFalse(ServiceSessionBean.isNumeric("12A"));
+    }
+
+    @Test
+    public void testStringNumbersToInts_NoMatch() {
+        List<Integer> result = serviceSessionBean.stringNumbersToInts("50", serviceSession);
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
     }
 }
