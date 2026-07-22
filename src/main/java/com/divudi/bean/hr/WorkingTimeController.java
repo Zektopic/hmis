@@ -140,7 +140,14 @@ public class WorkingTimeController implements Serializable {
     }
 
     public List<WorkingTime> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from WorkingTime c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String jpql = "select c from WorkingTime c where c.retired=false and upper(c.name) like :q order by c.name";
+        Map<String, Object> m = new HashMap<>();
+        String text = getSelectText();
+        if (text == null) {
+            text = "";
+        }
+        m.put("q", "%" + text.toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(jpql, m);
         return selectedItems;
     }
 
@@ -578,7 +585,10 @@ public class WorkingTimeController implements Serializable {
     public List<WorkingTime> completeWorkingTime(String qry) {
         List<WorkingTime> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from WorkingTime c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            String jpql = "select c from WorkingTime c where c.retired=false and upper(c.name) like :q order by c.name";
+            Map<String, Object> m = new HashMap<>();
+            m.put("q", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql(jpql, m);
         }
         if (a == null) {
             a = new ArrayList<WorkingTime>();
