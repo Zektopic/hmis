@@ -1163,7 +1163,7 @@ public class BhtEditController implements Serializable, ControllerWithPatient {
 
     @Override
     public void toggalePatientEditable() {
-        // ToDo: Add Logic
+        patientDetailsEditable = !patientDetailsEditable;
     }
 
     @Override
