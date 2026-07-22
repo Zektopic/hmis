@@ -44,6 +44,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.ejb.EJB;
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
@@ -57,6 +59,8 @@ import javax.persistence.TemporalType;
 @Named
 @ApplicationScoped
 public class PharmacyCalculation implements Serializable {
+
+    private static final Logger LOGGER = Logger.getLogger(PharmacyCalculation.class.getName());
 
     @EJB
     private PharmacyBean pharmacyBean;
@@ -1398,7 +1402,7 @@ public class PharmacyCalculation implements Serializable {
             
         } catch (Exception e) {
 // Log error and return empty map as fallback
-                        e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "An error occurred during pharmacy calculation", e);
             return new java.util.HashMap<>();
         }
     }
