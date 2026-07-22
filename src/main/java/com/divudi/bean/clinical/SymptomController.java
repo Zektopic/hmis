@@ -19,6 +19,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -43,6 +45,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 public class SymptomController implements Serializable {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger LOGGER = Logger.getLogger(SymptomController.class.getName());
     @Inject
     SessionController sessionController;
     @EJB
@@ -115,7 +118,7 @@ public class SymptomController implements Serializable {
             context.responseComplete();
         } catch (Exception e) {
             // Handle any exceptions
-            e.printStackTrace();
+            LOGGER.log(Level.SEVERE, "Error generating Excel download", e);
         }
     }
 
