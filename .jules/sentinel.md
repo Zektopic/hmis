@@ -122,3 +122,7 @@
 **Vulnerability:** A Path Traversal vulnerability existed in `StoreItemExcelManager.java` where uploaded file names (`file.getFileName()`) were concatenated directly into a `new File(...)` instantiation.
 **Learning:** When primefaces' `UploadedFile.getFileName()` provides a filename, it can contain relative path instructions (`../`) which will traverse directories when written natively to `File`.
 **Prevention:** Always sanitize the filename from an uploaded file using `Paths.get(fileName).getFileName().toString()` to extract just the base filename, stripping away any path manipulation characters.
+## 2024-05-18 - Fix JPQL Injection in SpecialityController
+**Vulnerability:** SQL Injection via String Concatenation in JPQL LIKE clauses (e.g., `(c.name) like '%" + qry.toUpperCase() + "%'`).
+**Learning:** When enforcing case insensitivity in parameterized JPQL `LIKE` queries, apply the `upper()` function to the database column directly within the JPQL string (`upper(c.name) like :qry`), and pass the already-uppercased search string as the parameter value. This ensures robust case-insensitive searching on all database backends without sacrificing safety.
+**Prevention:** Avoid string concatenation in JPQL queries. Always use parameterized queries via the `Map` parameter overload of `findByJpql()` and apply JPQL functions like `upper()` for formatting.
