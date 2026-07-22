@@ -10,6 +10,7 @@ import com.divudi.bean.common.ItemController;
 import com.divudi.bean.pharmacy.MeasurementUnitController;
 import com.divudi.bean.pharmacy.VmpController;
 import com.divudi.core.data.ItemType;
+import com.divudi.core.data.Sex;
 import com.divudi.core.data.SymanticType;
 import com.divudi.core.data.clinical.PrescriptionTemplateType;
 import com.divudi.core.entity.Category;
@@ -1172,7 +1173,7 @@ public class FavouriteMedicineApiService implements Serializable {
 
         String sex = (String) requestData.get("sex");
         if (sex != null && !sex.trim().isEmpty()) {
-            // TODO: Set sex enum if needed
+            template.setSex(Sex.getByLabelOrShortLabel(sex.trim()));
         }
     }
 
