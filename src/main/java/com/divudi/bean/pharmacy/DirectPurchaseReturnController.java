@@ -420,6 +420,7 @@ public class DirectPurchaseReturnController implements Serializable {
             BillItemFinanceDetails refFd = ref != null ? ref.getBillItemFinanceDetails() : null;
 
             if (fd == null || refFd == null) {
+                logger.log(Level.SEVERE, "Skipped saving BillItem {0} due to missing finance details", i.getId());
                 continue; // Skip if finance details are missing
             }
 
