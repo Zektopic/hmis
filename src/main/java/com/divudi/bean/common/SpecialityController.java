@@ -143,14 +143,17 @@ public class SpecialityController implements Serializable {
     }
 
     public List<Speciality> completeSpeciality(String qry) {
-        selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+        Map m = new HashMap();
+        m.put("qry", "%" + qry.toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false and upper(c.name) like :qry order by c.name", m);
         return selectedItems;
     }
 
     public List<Speciality> completeDoctorSpeciality(String qry) {
         Map m = new HashMap();
         m.put("class", DoctorSpeciality.class);
-        selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false and type(c)=:class and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name", m);
+        m.put("qry", "%" + qry.toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false and type(c)=:class and upper(c.name) like :qry order by c.name", m);
         return selectedItems;
     }
 
@@ -215,7 +218,9 @@ public class SpecialityController implements Serializable {
         if (selectText.trim().equals("")) {
             selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false order by c.name");
         } else {
-            selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+            Map m = new HashMap();
+            m.put("qry", "%" + getSelectText().toUpperCase() + "%");
+            selectedItems = getFacade().findByJpql("select c from Speciality c where c.retired=false and upper(c.name) like :qry order by c.name", m);
         }
 
         return selectedItems;
