@@ -776,12 +776,15 @@ public class StaffController implements Serializable {
                     + " where p.retired=false "
                     + " and LENGTH(p.code) > 0 "
                     + " and LENGTH(p.person.name) > 0 "
-                    + " and ((p.person.name) like '%" + query.toUpperCase() + "%' "
-                    + " or (p.code) like '%" + query.toUpperCase() + "%' )"
+                    + " and (upper(p.person.name) like :q "
+                    + " or upper(p.code) like :q )"
                     + " order by p.person.name";
 
+            Map<String, Object> hm = new HashMap<>();
+            hm.put("q", "%" + query.toUpperCase() + "%");
+
             //////System.out.println(sql);
-            suggestions = getEjbFacade().findByJpql(sql, 20);
+            suggestions = getEjbFacade().findByJpql(sql, hm, 20);
         }
         return suggestions;
     }
@@ -798,8 +801,10 @@ public class StaffController implements Serializable {
                     + " where s.retired=false "
                     + " and type(s)=:class "
                     + " and LENGTH(s.person.name) > 0 "
-                    + " and (s.person.name) like '%" + query.toUpperCase() + "%' "
+                    + " and upper(s.person.name) like :q "
                     + " order by s.person.name";
+
+            hm.put("q", "%" + query.toUpperCase() + "%");
 
             //////System.out.println(sql);
             suggestions = getEjbFacade().findByJpql(sql, hm, 20);
@@ -817,12 +822,16 @@ public class StaffController implements Serializable {
                     + " where p.retired=false "
                     + " and LENGTH(p.code) > 0 "
                     + " and LENGTH(p.person.name) > 0 "
-                    + " and ((p.person.name) like '%" + query.toUpperCase() + "%' "
-                    + " or (p.code)='" + query.toUpperCase() + "' )"
+                    + " and (upper(p.person.name) like :qLike "
+                    + " or upper(p.code)=:qExact )"
                     + " order by p.person.name";
 
+            Map<String, Object> hm = new HashMap<>();
+            hm.put("qLike", "%" + query.toUpperCase() + "%");
+            hm.put("qExact", query.toUpperCase());
+
             //////System.out.println(sql);
-            suggestions = getEjbFacade().findByJpql(sql, 20);
+            suggestions = getEjbFacade().findByJpql(sql, hm, 20);
         }
         return suggestions;
     }
@@ -839,11 +848,13 @@ public class StaffController implements Serializable {
                     + " and (p.dateLeft is null or p.dateLeft>:cd)"
                     + " and LENGTH(p.code) > 0 "
                     + " and LENGTH(p.person.name) > 0 "
-                    + " and ((p.person.name) like '%" + query.toUpperCase() + "%' "
-                    + " or (p.code)='" + query.toUpperCase() + "' )"
+                    + " and (upper(p.person.name) like :qLike "
+                    + " or upper(p.code)=:qExact )"
                     + " order by p.person.name";
 
             m.put("cd", new Date());
+            m.put("qLike", "%" + query.toUpperCase() + "%");
+            m.put("qExact", query.toUpperCase());
 
             //////System.out.println(sql);
             suggestions = getEjbFacade().findByJpql(sql, m, TemporalType.TIMESTAMP, 20);
