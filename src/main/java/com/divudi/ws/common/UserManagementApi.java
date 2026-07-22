@@ -361,6 +361,7 @@ public class UserManagementApi {
                 }
             }
 
+            List<WebUserPrivilege> wpsToCreate = new ArrayList<>();
             for (Privileges p : validPrivileges) {
                 if (existingPrivilegesSet.contains(p)) continue;
                 WebUserPrivilege wp = new WebUserPrivilege();
@@ -369,7 +370,10 @@ public class UserManagementApi {
                 wp.setDepartment(d);
                 wp.setCreater(apiUser);
                 wp.setCreatedAt(new Date());
-                webUserPrivilegeFacade.create(wp);
+                wpsToCreate.add(wp);
+            }
+            if (!wpsToCreate.isEmpty()) {
+                webUserPrivilegeFacade.batchCreate(wpsToCreate);
             }
             return listUserPrivileges(id);
         } catch (Exception e) {
@@ -431,8 +435,26 @@ public class UserManagementApi {
 
             int added = 0;
             int skipped = 0;
+            Set<Privileges> existingPrivilegesSetForCategories = new HashSet<>();
+            if (!matchingPrivileges.isEmpty()) {
+                Map<String, Object> existingParams = new HashMap<>();
+                existingParams.put("u", u);
+                existingParams.put("privs", matchingPrivileges);
+                existingParams.put("d", d);
+
+                String existingJpql = "select wp from WebUserPrivilege wp where wp.retired=false and wp.webUser=:u and wp.privilege in :privs and wp.department=:d";
+                List<WebUserPrivilege> existingPrivsList = webUserPrivilegeFacade.findByJpql(existingJpql, existingParams);
+                for (WebUserPrivilege wp : existingPrivsList) {
+                    if (wp.getPrivilege() != null) {
+                        existingPrivilegesSetForCategories.add(wp.getPrivilege());
+                    }
+                }
+            }
+
+            List<WebUserPrivilege> wpsToCreate = new ArrayList<>();
             for (Privileges p : matchingPrivileges) {
-                if (existingPrivilegesSet.contains(p)) {
+
+                if (existingPrivilegesSetForCategories.contains(p)) {
                     skipped++;
                     continue;
                 }
@@ -442,8 +464,11 @@ public class UserManagementApi {
                 wp.setDepartment(d);
                 wp.setCreater(apiUser);
                 wp.setCreatedAt(new Date());
-                webUserPrivilegeFacade.create(wp);
+                wpsToCreate.add(wp);
                 added++;
+            }
+            if (!wpsToCreate.isEmpty()) {
+                webUserPrivilegeFacade.batchCreate(wpsToCreate);
             }
 
             Map<String, Object> result = new LinkedHashMap<>();
