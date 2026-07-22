@@ -112,7 +112,13 @@
 **Vulnerability:** The `getLstToReceiveSearch()` and `getLstToReceive()` methods were vulnerable to JPQL injection due to unparameterized string concatenation with user-controlled input (`selectText`). Additionally, `getSessionController().getDepartment().getId()` was concatenated directly into queries, polluting the database's statement cache. The string concatenation to enforce case-insensitive search (`like '%" + selectText.toUpperCase() + "%'`) also did not uppercase the underlying columns, potentially failing on case-sensitive databases.
 **Learning:** Legacy queries using direct concatenation exist in multiple controllers for dynamic search filtering. Replacing them requires creating an internal map and safely migrating wildcard structures (e.g., `%value%`) into parameter values instead of query string structure.
 **Prevention:** Always use parameterized JPQL queries (e.g., `:paramName`) combined with a `Map` structure for dynamic values, and use the `UPPER()` function in JPQL to securely evaluate case-insensitivity without hardcoding user inputs.
+
 ## 2026-07-18 - [Fix JPQL Injection in PaysheetComponentController]
 **Vulnerability:** JPQL injection vulnerability due to string concatenation using `like '%" + ...toUpperCase() + "%'` directly in `findByJpql()`.
 **Learning:** Found multiple instances where search text was directly concatenated into JPQL `LIKE` clauses, leaving the backend open to injection. The correct way to perform case-insensitive LIKE queries in JPQL without concatenation is by using `upper()` in the query string and passing the upper-cased search parameter safely via parameterized maps (`upper(c.name) like :q`).
 **Prevention:** Avoid string concatenation for JPQL query parameters. Use parameterized queries with named parameters and explicitly pass them using a `Map<String, Object>`.
+
+## 2026-07-20 - Fix Path Traversal in StoreItemExcelManager
+**Vulnerability:** A Path Traversal vulnerability existed in `StoreItemExcelManager.java` where uploaded file names (`file.getFileName()`) were concatenated directly into a `new File(...)` instantiation.
+**Learning:** When primefaces' `UploadedFile.getFileName()` provides a filename, it can contain relative path instructions (`../`) which will traverse directories when written natively to `File`.
+**Prevention:** Always sanitize the filename from an uploaded file using `Paths.get(fileName).getFileName().toString()` to extract just the base filename, stripping away any path manipulation characters.
