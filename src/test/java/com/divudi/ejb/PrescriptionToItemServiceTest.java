@@ -9,10 +9,12 @@ import com.divudi.core.entity.pharmacy.Vmp;
 import com.divudi.ejb.PrescriptionToItemService.PrescriptionToItemResult;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PrescriptionToItemServiceTest {
@@ -161,5 +163,129 @@ public class PrescriptionToItemServiceTest {
         assertFalse(result.isSuccess());
         assertTrue(result.getErrorMessage().startsWith("Error finding suitable item:") ||
                    result.getErrorMessage().startsWith("No suitable specific items found for "));
+    }
+
+    private Double invokeCalculateTotalQuantity(Double dose, MeasurementUnit doseUnit,
+                                        MeasurementUnit frequencyUnit, Double duration,
+                                        MeasurementUnit durationUnit, MeasurementUnit issueUnit,
+                                        Amp amp) throws Exception {
+        PrescriptionToItemService service = new PrescriptionToItemService();
+
+        // Inject PrescriptionService using reflection
+        Field psField = PrescriptionToItemService.class.getDeclaredField("prescriptionService");
+        psField.setAccessible(true);
+        psField.set(service, new PrescriptionService());
+
+        Method method = PrescriptionToItemService.class.getDeclaredMethod("calculateTotalQuantity",
+                Double.class, MeasurementUnit.class, MeasurementUnit.class, Double.class,
+                MeasurementUnit.class, MeasurementUnit.class, Amp.class);
+        method.setAccessible(true);
+        return (Double) method.invoke(service, dose, doseUnit, frequencyUnit, duration, durationUnit, issueUnit, amp);
+    }
+
+    @Test
+    public void calculateTotalQuantity_durationNull_returnsNull() throws Exception {
+        Double dose = 500.0;
+        MeasurementUnit doseUnit = new MeasurementUnit();
+        doseUnit.setName("mg");
+        MeasurementUnit freqUnit = new MeasurementUnit();
+        freqUnit.setName("od");
+        Double duration = null;
+        MeasurementUnit durUnit = new MeasurementUnit();
+        durUnit.setName("days");
+        Amp amp = new Amp();
+
+        Double result = invokeCalculateTotalQuantity(dose, doseUnit, freqUnit, duration, durUnit, null, amp);
+        assertNull(result);
+    }
+
+    @Test
+    public void calculateTotalQuantity_durationZero_returnsNull() throws Exception {
+        Double dose = 500.0;
+        MeasurementUnit doseUnit = new MeasurementUnit();
+        doseUnit.setName("mg");
+        MeasurementUnit freqUnit = new MeasurementUnit();
+        freqUnit.setName("od");
+        Double duration = 0.0;
+        MeasurementUnit durUnit = new MeasurementUnit();
+        durUnit.setName("days");
+        Amp amp = new Amp();
+
+        Double result = invokeCalculateTotalQuantity(dose, doseUnit, freqUnit, duration, durUnit, null, amp);
+        assertNull(result);
+    }
+
+    @Test
+    public void calculateTotalQuantity_sameUnits_calculatesWithStrength() throws Exception {
+        Double dose = 1000.0;
+        MeasurementUnit doseUnit = new MeasurementUnit();
+        doseUnit.setName("mg");
+
+        MeasurementUnit freqUnit = new MeasurementUnit();
+        freqUnit.setName("bd"); // 2 times a day
+
+        Double duration = 5.0;
+        MeasurementUnit durUnit = new MeasurementUnit();
+        durUnit.setName("days");
+
+        Amp amp = new Amp();
+        amp.setStrengthOfAnIssueUnit(500.0);
+        MeasurementUnit strengthUnit = new MeasurementUnit();
+        strengthUnit.setName("mg");
+        amp.setStrengthUnit(strengthUnit);
+
+        Double result = invokeCalculateTotalQuantity(dose, doseUnit, freqUnit, duration, durUnit, null, amp);
+
+        // (1000 / 500) * (2 * 5) = 2 * 10 = 20.0
+        assertEquals(20.0, result);
+    }
+
+    @Test
+    public void calculateTotalQuantity_differentUnits_returnsAdministrations() throws Exception {
+        Double dose = 1.0;
+        MeasurementUnit doseUnit = new MeasurementUnit();
+        doseUnit.setName("tablet");
+
+        MeasurementUnit freqUnit = new MeasurementUnit();
+        freqUnit.setName("tds"); // 3 times a day
+
+        Double duration = 7.0;
+        MeasurementUnit durUnit = new MeasurementUnit();
+        durUnit.setName("days");
+
+        Amp amp = new Amp();
+        amp.setStrengthOfAnIssueUnit(500.0);
+        MeasurementUnit strengthUnit = new MeasurementUnit();
+        strengthUnit.setName("mg");
+        amp.setStrengthUnit(strengthUnit);
+
+        Double result = invokeCalculateTotalQuantity(dose, doseUnit, freqUnit, duration, durUnit, null, amp);
+
+        // doseUnit != strengthUnit ("tablet" vs "mg"), so it returns administrations
+        // 3 * 7 = 21.0
+        assertEquals(21.0, result);
+    }
+
+    @Test
+    public void calculateTotalQuantity_missingStrength_returnsAdministrations() throws Exception {
+        Double dose = 2.0;
+        MeasurementUnit doseUnit = new MeasurementUnit();
+        doseUnit.setName("ml");
+
+        MeasurementUnit freqUnit = new MeasurementUnit();
+        freqUnit.setName("od"); // 1 time a day
+
+        Double duration = 14.0;
+        MeasurementUnit durUnit = new MeasurementUnit();
+        durUnit.setName("days");
+
+        Amp amp = new Amp();
+        // missing strength
+
+        Double result = invokeCalculateTotalQuantity(dose, doseUnit, freqUnit, duration, durUnit, null, amp);
+
+        // No strength, so returns administrations
+        // 1 * 14 = 14.0
+        assertEquals(14.0, result);
     }
 }
