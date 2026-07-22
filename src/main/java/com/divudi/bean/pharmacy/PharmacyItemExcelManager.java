@@ -2451,7 +2451,7 @@ public class PharmacyItemExcelManager implements Serializable {
                     }
                 }
 
-                // Manufacturer - FIX: This was previously incorrectly assigned to importer
+                // Manufacturer - FIXED: This was previously incorrectly assigned to importer
                 org.apache.poi.ss.usermodel.Cell manufacturerCell = row.getCell(manufacturerCol);
                 strManufacturer = getStringCellValue(manufacturerCell);
                 if (strManufacturer != null && !strManufacturer.trim().isEmpty()) {
