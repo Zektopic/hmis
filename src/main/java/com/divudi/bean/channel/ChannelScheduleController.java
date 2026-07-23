@@ -684,8 +684,11 @@ public class ChannelScheduleController implements Serializable {
             suggestions = new ArrayList<>();
         } else {
             if (getCurrentStaff() != null) {
-                sql = "select p from ServiceSession p where p.retired=false and (p.name) like '%" + query.toUpperCase() + "%' and p.staff.id = " + getCurrentStaff().getId() + " order by p.name";
-                suggestions = getFacade().findByJpql(sql);
+                sql = "select p from ServiceSession p where p.retired=false and upper(p.name) like :query and p.staff.id = :staffId order by p.name";
+                Map<String, Object> params = new HashMap<>();
+                params.put("query", "%" + query.toUpperCase() + "%");
+                params.put("staffId", getCurrentStaff().getId());
+                suggestions = getFacade().findByJpql(sql, params);
             } else {
                 suggestions = new ArrayList<>();
             }

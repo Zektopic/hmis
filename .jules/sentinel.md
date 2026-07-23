@@ -126,3 +126,7 @@
 **Vulnerability:** SQL Injection via String Concatenation in JPQL LIKE clauses (e.g., `(c.name) like '%" + qry.toUpperCase() + "%'`).
 **Learning:** When enforcing case insensitivity in parameterized JPQL `LIKE` queries, apply the `upper()` function to the database column directly within the JPQL string (`upper(c.name) like :qry`), and pass the already-uppercased search string as the parameter value. This ensures robust case-insensitive searching on all database backends without sacrificing safety.
 **Prevention:** Avoid string concatenation in JPQL queries. Always use parameterized queries via the `Map` parameter overload of `findByJpql()` and apply JPQL functions like `upper()` for formatting.
+## 2024-07-23 - Parameterized Queries for Dynamic Search Lookups
+**Vulnerability:** JPQL Injection in `ChannelScheduleController.completeSession()`
+**Learning:** Found string concatenation being used dynamically in autocomplete functions containing `like '%" + query.toUpperCase() + "%'`. This is a common but dangerous pattern for PrimeFaces UI auto-completes to bypass standard ORM parameterization.
+**Prevention:** Always parameterize `.toUpperCase()` conversions and string patterns inside the query mapping (e.g. `upper(p.name) like :query`) and pass values cleanly through the JPA facade via the parameter map.
