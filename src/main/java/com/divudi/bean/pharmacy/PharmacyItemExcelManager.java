@@ -1217,7 +1217,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -1480,7 +1480,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -1598,7 +1598,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -1710,7 +1710,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -1791,7 +1791,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -1863,7 +1863,7 @@ public class PharmacyItemExcelManager implements Serializable {
 //            JsfUtil.addSuccessMessage(file.getFileName());
 //            in = file.getInputStream();
 //            File f;
-//            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+//            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
 //            FileOutputStream out = new FileOutputStream(f);
 //            int read = 0;
 //            byte[] bytes = new byte[1024];
@@ -1959,7 +1959,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -2058,7 +2058,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -2526,7 +2526,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -2621,7 +2621,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -2736,7 +2736,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
@@ -2816,7 +2816,7 @@ public class PharmacyItemExcelManager implements Serializable {
             JsfUtil.addSuccessMessage(file.getFileName());
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out = new FileOutputStream(f);
             int read;
             byte[] bytes = new byte[1024];
