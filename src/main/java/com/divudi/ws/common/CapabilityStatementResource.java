@@ -146,6 +146,9 @@ public class CapabilityStatementResource {
                         "Inward patient workflows",
                         "API Key",
                         "GET", "POST"))
+                .add(resource("Admission Number Counters", "/api/admission-numbers",
+                        "View or reset the BHT/OPD-card admission-number sequence counter for an admission type.",
+                        "API Key (Finance header)", "GET", "PUT"))
                 .add(resource("Inward Discount Matrix", "/api/inward-discount-matrix",
                         "Manage inward discount matrix entries for services/investigations and pharmacy. "
                         + "Supports scope=service|pharmacy to restrict category types. "
@@ -395,7 +398,10 @@ public class CapabilityStatementResource {
                         "API Key",
                         "GET", "POST", "DELETE"))
                                 .add(resource("Investigations", "/api/investigations",
-                        "Investigation master management including search, create, update, and activate/deactivate for item import workflows",
+                        "Investigation master management including search, create, update, and activate/deactivate for item import workflows. "
+                        + "Category/sample/container(tube)/analyzer(machine) can each be set via an ID referencing an existing row "
+                        + "(categoryId, sampleId, containerId, analyzerId — errors if not found) or a name "
+                        + "(categoryName, sampleName, containerName, analyzerName — found-or-created by name if no matching row exists).",
                         "API Key",
                         "GET", "POST", "PUT", "PATCH"))
                 .add(resource("Investigation Format", "/api/investigations/{investigationId}/format",
@@ -403,6 +409,22 @@ public class CapabilityStatementResource {
                         + "item values (dropdown options for List-type items), calculations (formulas referencing other items), "
                         + "flags (reference range flags by age/sex), and dynamic labels (conditional labels by age/sex). "
                         + "Sub-resources: /items, /items/{itemId}/values, /calculations, /flags, /dynamic-labels.",
+                        "API Key",
+                        "GET", "POST", "PUT", "DELETE"))
+                .add(resource("Investigation Components", "/api/investigations/{investigationId}/components",
+                        "Manage InvestigationComponent groupings used to organize report items within an investigation's format "
+                        + "(componentName only). GET lists components for the investigation. POST creates one. "
+                        + "PUT /{componentId} renames one. DELETE /{componentId} permanently removes one — rejected with an error "
+                        + "if any report item (InvestigationItem) still references it.",
+                        "API Key",
+                        "GET", "POST", "PUT", "DELETE"))
+                .add(resource("Investigation Fees", "/api/investigations/{investigationId}/fees",
+                        "Manage investigation pricing (ItemFee), mirroring the Services /fees sub-resource. "
+                        + "GET lists non-retired fees for the investigation. POST adds a fee "
+                        + "(body: name, feeType, fee, ffee, discountAllowed, institutionId, departmentId, specialityId, staffId). "
+                        + "PUT /{feeId} updates a fee (only non-null fields are applied). "
+                        + "DELETE /{feeId} soft-deletes (retires) a fee. All mutations recalculate the investigation's "
+                        + "total/totalForForeigner and are rejected against a retired investigation.",
                         "API Key",
                         "GET", "POST", "PUT", "DELETE"))
                 .add(resource("Services", "/api/services",

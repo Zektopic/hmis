@@ -62,7 +62,10 @@ public class ApplicationConfig extends Application {
         resources.add(com.divudi.ws.institution.InstitutionApi.class);
         resources.add(com.divudi.ws.institution.SiteApi.class);
         resources.add(com.divudi.ws.investigation.InvestigationApi.class);
+        resources.add(com.divudi.ws.investigation.InvestigationComponentApi.class);
+        resources.add(com.divudi.ws.investigation.InvestigationFeeApi.class);
         resources.add(com.divudi.ws.investigation.InvestigationFormatApi.class);
+        resources.add(com.divudi.ws.inward.AdmissionNumberApi.class);
         resources.add(com.divudi.ws.inward.ApiInward.class);
         resources.add(com.divudi.ws.inward.InwardDiscountMatrixApi.class);
         resources.add(com.divudi.ws.inward.InwardDocumentTemplateApi.class);
