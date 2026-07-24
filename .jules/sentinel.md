@@ -130,3 +130,7 @@
 **Vulnerability:** JPQL Injection in `ChannelScheduleController.completeSession()`
 **Learning:** Found string concatenation being used dynamically in autocomplete functions containing `like '%" + query.toUpperCase() + "%'`. This is a common but dangerous pattern for PrimeFaces UI auto-completes to bypass standard ORM parameterization.
 **Prevention:** Always parameterize `.toUpperCase()` conversions and string patterns inside the query mapping (e.g. `upper(p.name) like :query`) and pass values cleanly through the JPA facade via the parameter map.
+## YYYY-MM-DD - Fix Path Traversal in PharmacyItemExcelManager
+**Vulnerability:** Path traversal vulnerability existed because `file.getFileName()` was directly concatenated to paths without sanitization when saving uploaded Excel files in `PharmacyItemExcelManager.java`.
+**Learning:** `UploadedFile` from JSF/PrimeFaces does not automatically sanitize file paths, making it possible for attackers to inject `../` sequences into the generated file paths.
+**Prevention:** Always use `java.nio.file.Paths.get(filename).getFileName().toString()` to extract only the actual filename component when dealing with user-uploaded files.
