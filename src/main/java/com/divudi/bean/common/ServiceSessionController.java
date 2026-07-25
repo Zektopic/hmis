@@ -12,7 +12,9 @@ import com.divudi.core.facade.ServiceSessionFacade;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -42,14 +44,20 @@ public class ServiceSessionController implements Serializable {
     String selectText = "";
 
     public List<ServiceSession> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from ServiceSession c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        // Fix SQL Injection by using parameterized query
+        Map<String, Object> params = new HashMap<>();
+        params.put("qry", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from ServiceSession c where c.retired=false and upper(c.name) like :qry order by c.name", params);
         return selectedItems;
     }
 
     public List<ServiceSession> completeServiceSession(String qry) {
         List<ServiceSession> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from ServiceSession c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            // Fix SQL Injection by using parameterized query
+            Map<String, Object> params = new HashMap<>();
+            params.put("qry", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql("select c from ServiceSession c where c.retired=false and upper(c.name) like :qry order by c.name", params);
         }
         if (a == null) {
             a = new ArrayList<ServiceSession>();
@@ -64,9 +72,12 @@ public class ServiceSessionController implements Serializable {
             suggestions = new ArrayList<ServiceSession>();
         } else {
 
-            sql = "select p from ServiceSession p where p.retired=false and (((p.staff.person.name) like '%" + query.toUpperCase() + "%') or ((p.name) like '%" + query.toUpperCase() + "%') or ((p.staff.speciality.name) like '%" + query.toUpperCase() + "%') ) order by p.name";
+            // Fix SQL Injection by using parameterized query
+            sql = "select p from ServiceSession p where p.retired=false and (upper(p.staff.person.name) like :qry or upper(p.name) like :qry or upper(p.staff.speciality.name) like :qry ) order by p.name";
+            Map<String, Object> params = new HashMap<>();
+            params.put("qry", "%" + query.toUpperCase() + "%");
             //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            suggestions = getFacade().findByJpql(sql, params);
         }
         return suggestions;
     }
