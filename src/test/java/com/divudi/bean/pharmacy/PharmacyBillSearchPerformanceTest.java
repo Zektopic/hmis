@@ -21,6 +21,7 @@ public class PharmacyBillSearchPerformanceTest {
     private long createCount = 0;
     private long editCount = 0;
     private long batchCreateCount = 0;
+    private long batchEditCount = 0;
 
     // Mock facades
     private class MockPharmaceuticalBillItemFacade extends PharmaceuticalBillItemFacade {
@@ -36,6 +37,14 @@ public class PharmacyBillSearchPerformanceTest {
         public void batchCreate(List<PharmaceuticalBillItem> entities) {
             batchCreateCount++;
         }
+        @Override
+        public void batchEdit(List<PharmaceuticalBillItem> entities) {
+            batchEditCount++;
+        }
+        @Override
+        public void batchEdit(List<PharmaceuticalBillItem> entities, int batchSize) {
+            batchEditCount++;
+        }
     }
 
     private class MockBillItemFacade extends BillItemFacade {
@@ -50,6 +59,14 @@ public class PharmacyBillSearchPerformanceTest {
         @Override
         public void batchCreate(List<BillItem> entities) {
             batchCreateCount++;
+        }
+        @Override
+        public void batchEdit(List<BillItem> entities) {
+            batchEditCount++;
+        }
+        @Override
+        public void batchEdit(List<BillItem> entities, int batchSize) {
+            batchEditCount++;
         }
     }
 
@@ -98,6 +115,7 @@ public class PharmacyBillSearchPerformanceTest {
         createCount = 0;
         editCount = 0;
         batchCreateCount = 0;
+        batchEditCount = 0;
     }
 
     @Test
