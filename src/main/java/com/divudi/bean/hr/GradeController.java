@@ -15,7 +15,9 @@ import com.divudi.core.facade.GradeFacade;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.EJB;
 import javax.enterprise.context.SessionScoped;
 import javax.faces.component.UIComponent;
@@ -49,7 +51,9 @@ public class GradeController implements Serializable {
     public List<Grade> completeGrade(String qry) {
         List<Grade> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from Grade c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            Map<String, Object> m = new HashMap<>();
+            m.put("n", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql("select c from Grade c where c.retired=false and upper(c.name) like :n order by c.name", m);
         }
         if (a == null) {
             a = new ArrayList<>();
