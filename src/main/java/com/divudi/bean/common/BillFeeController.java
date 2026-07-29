@@ -45,7 +45,11 @@ public class BillFeeController implements Serializable {
     String selectText = "";
 
     public List<BillFee> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from BillFee c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        // 🛡️ Sentinel: Fix JPQL injection vulnerability by using parameterized query
+        String sql = "select c from BillFee c where c.retired=false and upper(c.name) like :qry order by c.name";
+        Map<String, Object> m = new HashMap<>();
+        m.put("qry", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, m);
         return selectedItems;
     }
 
