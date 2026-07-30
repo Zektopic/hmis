@@ -44,7 +44,10 @@ public class RoomCategoryController implements Serializable {
     String selectText = "";
 
     public List<RoomCategory> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from RoomCategory c where c.retired=false  and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String sql = "select c from RoomCategory c where c.retired=false and upper(c.name) like :q order by c.name";
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, params);
         return selectedItems;
     }
 
@@ -143,9 +146,10 @@ public class RoomCategoryController implements Serializable {
     }
 
     public List<RoomCategory> completeRoomCategory(String qry) {
-        String sql;
-        sql = "select c from RoomCategory c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name";
-        return getFacade().findByJpql(sql);
+        String sql = "select c from RoomCategory c where c.retired=false and upper(c.name) like :q order by c.name";
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("q", "%" + qry.toUpperCase() + "%");
+        return getFacade().findByJpql(sql, params);
     }
 
     /**
