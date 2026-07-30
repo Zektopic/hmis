@@ -66,7 +66,10 @@ public class StaffLeaveEntitleController implements Serializable {
     public List<StaffLeaveEntitle> completeStaffLeaveEntitle(String qry) {
         List<StaffLeaveEntitle> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from StaffLeaveEntitle c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+            String jpql = "select c from StaffLeaveEntitle c where c.retired=false and upper(c.name) like :q order by c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql(jpql, m);
         }
         if (a == null) {
             a = new ArrayList<>();
