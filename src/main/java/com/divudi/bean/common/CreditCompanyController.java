@@ -75,9 +75,11 @@ public class CreditCompanyController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
-            sql = "select p from Institution p where p.retired=false and p.institutionType=com.divudi.core.data.InstitutionType.CreditCompany and (p.name) like '%" + query.toUpperCase() + "%' order by p.name";
+            sql = "select p from Institution p where p.retired=false and p.institutionType=com.divudi.core.data.InstitutionType.CreditCompany and upper(p.name) like :q order by p.name";
             //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
@@ -89,7 +91,9 @@ public class CreditCompanyController implements Serializable {
     }
 
     public List<Institution> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Institution c where c.retired=false and i.institutionType = com.divudi.core.data.InstitutionType.CreditCompany  and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Institution c where c.retired=false and c.institutionType = com.divudi.core.data.InstitutionType.CreditCompany  and upper(c.name) like :q order by c.name", m);
         return selectedItems;
     }
 
