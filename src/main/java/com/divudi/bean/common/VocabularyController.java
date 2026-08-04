@@ -93,7 +93,9 @@ public class VocabularyController implements Serializable {
 
     public List<Vocabulary> completeVocabulary(String qry) {
         List<Vocabulary> c;
-        c = getFacade().findByJpql("select c from Vocabulary c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + qry.toUpperCase() + "%");
+        c = getFacade().findByJpql("select c from Vocabulary c where c.retired=false and upper(c.name) like :q order by c.name", m);
         if (c == null) {
             c = new ArrayList<>();
         }
@@ -101,7 +103,9 @@ public class VocabularyController implements Serializable {
     }
 
     public List<Vocabulary> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Vocabulary c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Vocabulary c where c.retired=false and upper(c.name) like :q order by c.name", m);
         return selectedItems;
     }
 
