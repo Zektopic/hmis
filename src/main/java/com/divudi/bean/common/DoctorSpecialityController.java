@@ -93,7 +93,10 @@ public class DoctorSpecialityController implements Serializable {
 
     public List<DoctorSpeciality> completeSpeciality(String qry) {
         List<DoctorSpeciality> lst;
-        lst = getFacade().findByJpql("select c from DoctorSpeciality c where c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("n", "%" + qry.toUpperCase() + "%");
+        // Sentinel: Prevent JPQL injection by using parameterized queries
+        lst = getFacade().findByJpql("select c from DoctorSpeciality c where c.retired=false and upper(c.name) like :n order by c.name", m);
         return lst;
     }
 
