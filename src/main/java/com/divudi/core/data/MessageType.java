@@ -41,5 +41,8 @@ public enum MessageType {
     InpatientDocumentUpload,
     InpatientFilledForm,
     InpatientClinicalDocument,
-    ClientPortalRegistrationOTP
+    ClientPortalRegistrationOTP,
+    ClientPortalPasswordResetOTP,
+    ClientPortalEmailRegistrationOTP,
+    InwardFinalBillEmail
 }
