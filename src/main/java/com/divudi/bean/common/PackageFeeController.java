@@ -41,7 +41,9 @@ public  class PackageFeeController implements Serializable {
     String selectText = "";
 
     public List<PackageFee> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from PackageFee c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("param", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from PackageFee c where c.retired=false and upper(c.name) like :param order by c.name", m);
         return selectedItems;
     }
 
