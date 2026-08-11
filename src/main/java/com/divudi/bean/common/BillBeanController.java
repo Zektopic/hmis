@@ -3510,12 +3510,13 @@ public class BillBeanController implements Serializable {
         sql = "select b from BilledBill b where"
                 + " b.billType = :billType and b.retired=false"
                 + " and  b.createdAt between :fromDate and :toDate"
-                + " and ((b.patient.person.name) like '%" + searchStr.toUpperCase() + "%' "
-                + " or (b.patient.person.phone) like '%" + searchStr.toUpperCase() + "%' "
-                + " or (b.insId) like '%" + searchStr.toUpperCase() + "%') order by b.insId desc  ";
+                + " and ((b.patient.person.name) like :searchStr "
+                + " or (b.patient.person.phone) like :searchStr "
+                + " or (b.insId) like :searchStr) order by b.insId desc  ";
         temMap.put("billType", type);
         temMap.put("toDate", toDate);
         temMap.put("fromDate", fromDate);
+        temMap.put("searchStr", "%" + searchStr.toUpperCase() + "%");
         lstBills = getBillFacade().findByJpql(sql, temMap, TemporalType.TIMESTAMP);
 
         if (lstBills == null) {
