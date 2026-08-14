@@ -999,7 +999,7 @@ public class RetailSaleNativeSqlController3 implements Serializable, ControllerW
             Object[] row = (Object[]) itemBatchFacade.findLightsByJpql(jpql, params, TemporalType.DATE, 1)
                     .stream().findFirst().orElse(null);
             if (row == null) return new double[]{0, 0, 0, 0};
-            return new double[]{toDouble(row[0]), toDouble(row[1]), toDouble(row[2]), toDouble(row[3])};
+            return new double[]{CommonFunctions.toDouble(row[0]), CommonFunctions.toDouble(row[1]), CommonFunctions.toDouble(row[2]), CommonFunctions.toDouble(row[3])};
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Could not fetch batch rates for itemBatchId={0}", itemBatchId);
             return new double[]{0, 0, 0, 0};
@@ -1037,10 +1037,6 @@ public class RetailSaleNativeSqlController3 implements Serializable, ControllerW
             LOGGER.log(Level.WARNING, "Could not resolve AMP for itemId={0}", itemId);
             return itemId;
         }
-    }
-
-    private static double toDouble(Object o) {
-        return o == null ? 0.0 : ((Number) o).doubleValue();
     }
 
     // -----------------------------------------------------------------------

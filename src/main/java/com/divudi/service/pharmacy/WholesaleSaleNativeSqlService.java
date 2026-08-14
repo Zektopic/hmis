@@ -5,6 +5,7 @@
  */
 package com.divudi.service.pharmacy;
 
+import com.divudi.core.util.CommonFunctions;
 import com.divudi.core.data.PaymentMethod;
 import com.divudi.core.data.dataStructure.ComponentDetail;
 import com.divudi.core.data.dataStructure.PaymentMethodData;
@@ -588,24 +589,20 @@ public class WholesaleSaleNativeSqlService {
                 .setParameter(9, ampItemId)
                 .getSingleResult();
 
-        r.setDepartmentItemStock(toDouble(itemRow[0]));
-        r.setInstitutionItemStock(toDouble(itemRow[1]));
-        r.setTotalItemStock(toDouble(itemRow[2]));
-        r.setItemStockValueAtPurchaseRate(toDouble(itemRow[3]));
-        r.setInstitutionItemStockValueAtPurchaseRate(toDouble(itemRow[4]));
-        r.setTotalItemStockValueAtPurchaseRate(toDouble(itemRow[5]));
-        r.setItemStockValueAtCostRate(toDouble(itemRow[6]));
-        r.setInstitutionItemStockValueAtCostRate(toDouble(itemRow[7]));
-        r.setTotalItemStockValueAtCostRate(toDouble(itemRow[8]));
-        r.setItemStockValueAtSaleRate(toDouble(itemRow[9]));
-        r.setInstitutionItemStockValueAtSaleRate(toDouble(itemRow[10]));
-        r.setTotalItemStockValueAtSaleRate(toDouble(itemRow[11]));
+        r.setDepartmentItemStock(CommonFunctions.toDouble(itemRow[0]));
+        r.setInstitutionItemStock(CommonFunctions.toDouble(itemRow[1]));
+        r.setTotalItemStock(CommonFunctions.toDouble(itemRow[2]));
+        r.setItemStockValueAtPurchaseRate(CommonFunctions.toDouble(itemRow[3]));
+        r.setInstitutionItemStockValueAtPurchaseRate(CommonFunctions.toDouble(itemRow[4]));
+        r.setTotalItemStockValueAtPurchaseRate(CommonFunctions.toDouble(itemRow[5]));
+        r.setItemStockValueAtCostRate(CommonFunctions.toDouble(itemRow[6]));
+        r.setInstitutionItemStockValueAtCostRate(CommonFunctions.toDouble(itemRow[7]));
+        r.setTotalItemStockValueAtCostRate(CommonFunctions.toDouble(itemRow[8]));
+        r.setItemStockValueAtSaleRate(CommonFunctions.toDouble(itemRow[9]));
+        r.setInstitutionItemStockValueAtSaleRate(CommonFunctions.toDouble(itemRow[10]));
+        r.setTotalItemStockValueAtSaleRate(CommonFunctions.toDouble(itemRow[11]));
 
         return r;
-    }
-
-    private static double toDouble(Object o) {
-        return o == null ? 0.0 : ((Number) o).doubleValue();
     }
 
     // -----------------------------------------------------------------------
@@ -965,11 +962,11 @@ public class WholesaleSaleNativeSqlService {
         for (Object[] row : rows) {
             BillItemData bid = new BillItemData();
             bid.setItemName(row[0] != null ? row[0].toString() : "");
-            bid.setQty(toDouble(row[1]));
-            bid.setRate(toDouble(row[2]));
-            bid.setNetRate(toDouble(row[3]));
-            bid.setNetValue(toDouble(row[4]));
-            bid.setGrossValue(toDouble(row[5]));
+            bid.setQty(CommonFunctions.toDouble(row[1]));
+            bid.setRate(CommonFunctions.toDouble(row[2]));
+            bid.setNetRate(CommonFunctions.toDouble(row[3]));
+            bid.setNetValue(CommonFunctions.toDouble(row[4]));
+            bid.setGrossValue(CommonFunctions.toDouble(row[5]));
             bid.setDoe(row[6] instanceof java.sql.Date
                     ? new java.util.Date(((java.sql.Date) row[6]).getTime())
                     : (row[6] instanceof java.util.Date ? (java.util.Date) row[6] : null));
