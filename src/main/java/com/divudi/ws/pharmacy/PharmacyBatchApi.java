@@ -55,6 +55,18 @@ public class PharmacyBatchApi {
     @Inject
     private PharmacyBatchApiService batchService;
 
+    private static final ThreadLocal<SimpleDateFormat[]> DATE_FORMATS = ThreadLocal.withInitial(() -> {
+        SimpleDateFormat[] formats = new SimpleDateFormat[]{
+                new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"),
+                new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"),
+                new SimpleDateFormat("yyyy-MM-dd")
+        };
+        for (SimpleDateFormat f : formats) {
+            f.setLenient(false);
+        }
+        return formats;
+    });
+
     // Support multiple date formats for expiryDate and other Date fields
     private static final JsonDeserializer<Date> DATE_DESERIALIZER = (JsonElement json, Type typeOfT, com.google.gson.JsonDeserializationContext context) -> {
         if (json == null) {
@@ -66,16 +78,9 @@ public class PharmacyBatchApi {
         }
 
         String value = s.trim();
-        String[] patterns = new String[]{
-                "yyyy-MM-dd HH:mm:ss",
-                "yyyy-MM-dd'T'HH:mm:ss",
-                "yyyy-MM-dd"
-        };
 
-        for (String p : patterns) {
+        for (SimpleDateFormat sdf : DATE_FORMATS.get()) {
             try {
-                SimpleDateFormat sdf = new SimpleDateFormat(p);
-                sdf.setLenient(false);
                 return sdf.parse(value);
             } catch (ParseException ignored) {
             }
