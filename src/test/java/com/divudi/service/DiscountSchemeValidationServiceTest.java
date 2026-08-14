@@ -1,12 +1,12 @@
 package com.divudi.service;
 
 import com.divudi.bean.common.ConfigOptionApplicationController;
+import com.divudi.core.data.BooleanMessage;
 import com.divudi.core.data.PaymentMethod;
 import com.divudi.core.data.dataStructure.PaymentMethodData;
 import com.divudi.core.entity.PaymentScheme;
 import com.divudi.core.entity.membership.RestrictedPaymentMethod;
 import com.divudi.core.facade.RestrictedPaymentMethodFacade;
-import com.divudi.core.data.BooleanMessage;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -15,9 +15,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DiscountSchemeValidationServiceTest {
 
@@ -102,6 +103,27 @@ public class DiscountSchemeValidationServiceTest {
         BooleanMessage result = service.validateDiscountScheme(PaymentMethod.Cash, scheme, null);
         assertFalse(result.isFlag());
         assertEquals("Discount scheme Staff Scheme can NOT be allowed with the payment method Cash", result.getMessage());
+    }
+
+    @Test
+    public void testValidateNotRestrictedPaymentMethodWithNulls() {
+        // Test with all nulls
+        BooleanMessage result = service.validateNotRestrictedPaymentMethod(null, null, null);
+        assertNotNull(result);
+        assertTrue(result.isFlag());
+        assertEquals("No restricted payment method.", result.getMessage());
+
+        // Test with discountScheme null
+        result = service.validateNotRestrictedPaymentMethod(PaymentMethod.Cash, null, null);
+        assertNotNull(result);
+        assertTrue(result.isFlag());
+        assertEquals("No restricted payment method.", result.getMessage());
+
+        // Test with paymentMethod null
+        result = service.validateNotRestrictedPaymentMethod(null, new PaymentScheme(), null);
+        assertNotNull(result);
+        assertTrue(result.isFlag());
+        assertEquals("No restricted payment method.", result.getMessage());
     }
 
     // Mock classes
