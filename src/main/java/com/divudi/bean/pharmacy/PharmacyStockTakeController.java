@@ -2845,14 +2845,14 @@ public class PharmacyStockTakeController implements Serializable {
                         ? (com.divudi.core.data.DepartmentType) r[11] : null;
                 dtos.add(new com.divudi.core.data.dto.SnapshotBillItemDTO(
                         toLong(r[0]),          // billItemId
-                        toDouble(r[1]),        // qty
+                        CommonFunctions.toDouble(r[1]),        // qty
                         r[2] != null ? r[2].toString() : null,  // itemName
                         r[12] != null ? r[12].toString() : null, // itemCode
                         r[3] != null ? r[3].toString() : null,  // categoryName
-                        toDouble(r[4]),        // netValue
-                        toDouble(r[5]),        // costRate
-                        toDouble(r[6]),        // purchaseRate
-                        toDouble(r[7]),        // retailRate
+                        CommonFunctions.toDouble(r[4]),        // netValue
+                        CommonFunctions.toDouble(r[5]),        // costRate
+                        CommonFunctions.toDouble(r[6]),        // purchaseRate
+                        CommonFunctions.toDouble(r[7]),        // retailRate
                         expiry,                // expiryDate
                         r[9] != null ? r[9].toString() : null,  // batchNo
                         r[10] != null ? r[10].toString() : null, // dosageForm
@@ -2890,11 +2890,6 @@ public class PharmacyStockTakeController implements Serializable {
     private static long toLong(Object o) {
         if (o == null) return 0L;
         return ((Number) o).longValue();
-    }
-
-    private static double toDouble(Object o) {
-        if (o == null) return 0.0;
-        return ((Number) o).doubleValue();
     }
 
     /**

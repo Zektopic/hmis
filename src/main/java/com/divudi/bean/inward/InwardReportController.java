@@ -859,8 +859,8 @@ public class InwardReportController implements Serializable {
             for (Object[] row : childBillsAgg) {
                 Long parentId = (Long) row[0];
                 SurgeryBillType sbType = (SurgeryBillType) row[1];
-                double net = toDouble(row[2]);
-                double discount = toDouble(row[3]);
+                double net = CommonFunctions.toDouble(row[2]);
+                double discount = CommonFunctions.toDouble(row[3]);
 
                 SurgeryCostEstimationDTO dto = dtoByBillId.get(parentId);
                 if (dto == null) {
@@ -912,7 +912,7 @@ public class InwardReportController implements Serializable {
 
             for (Object[] row : roomList) {
                 Long peId = (Long) row[0];
-                double totalRoomCharge = toDouble(row[1]);
+                double totalRoomCharge = CommonFunctions.toDouble(row[1]);
 
                 List<SurgeryCostEstimationDTO> dtos = dtosByPeId.get(peId);
                 if (dtos == null) {
@@ -967,7 +967,7 @@ public class InwardReportController implements Serializable {
 
             for (Object[] row : drugList) {
                 Long peId = (Long) row[0];
-                double drugVal = toDouble(row[1]);
+                double drugVal = CommonFunctions.toDouble(row[1]);
 
                 List<SurgeryCostEstimationDTO> dtos = dtosByPeId.get(peId);
                 if (dtos == null) {
@@ -987,10 +987,6 @@ public class InwardReportController implements Serializable {
             dto.setNetAmount(net);
             dto.setTotalAmount(total);
         }
-    }
-
-    private static double toDouble(Object value) {
-        return value instanceof Number ? ((Number) value).doubleValue() : 0.0;
     }
 
     private static List<List<Long>> partition(Collection<Long> ids, int batchSize) {

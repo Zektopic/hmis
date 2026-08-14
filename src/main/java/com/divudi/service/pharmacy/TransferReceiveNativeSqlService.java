@@ -6,6 +6,7 @@
 package com.divudi.service.pharmacy;
 
 import com.divudi.core.data.dto.StockAggregateResult;
+import com.divudi.core.util.CommonFunctions;
 import com.divudi.core.data.dto.TransferReceiveItemPrintDto;
 import com.divudi.core.data.dto.TransferReceiveItemRowDto;
 import com.divudi.core.data.dto.TransferReceivePrintDto;
@@ -155,7 +156,7 @@ public class TransferReceiveNativeSqlService {
             long biId = ((Number) row[0]).longValue();
 
             // pbi.qty holds units as a negative value (issue direction); take abs
-            double issuedUnits = Math.abs(toDouble(row[8]));
+            double issuedUnits = Math.abs(CommonFunctions.toDouble(row[8]));
             double alreadyReceived = receivedMap.getOrDefault(biId, 0.0);
             double remaining = issuedUnits - alreadyReceived;
 
@@ -164,15 +165,15 @@ public class TransferReceiveNativeSqlService {
             }
 
             String dtype = row[18] != null ? row[18].toString() : "";
-            double dblValue = toDouble(row[19]);
+            double dblValue = CommonFunctions.toDouble(row[19]);
             // Ampp and Vmpp items have units per pack stored in dblValue
             double unitsPerPack = (("Ampp".equals(dtype) || "Vmpp".equals(dtype)) && dblValue > 0)
                     ? dblValue : 1.0;
 
-            double purchaseRate = toDouble(row[11]);
-            double retailRate = toDouble(row[12]);
-            double wholesaleRate = toDouble(row[13]);
-            double costRate = toDouble(row[14]);
+            double purchaseRate = CommonFunctions.toDouble(row[11]);
+            double retailRate = CommonFunctions.toDouble(row[12]);
+            double wholesaleRate = CommonFunctions.toDouble(row[13]);
+            double costRate = CommonFunctions.toDouble(row[14]);
 
             BigDecimal grossRate;
             if (byPurchaseRate) {
@@ -648,13 +649,13 @@ public class TransferReceiveNativeSqlService {
             item.setItemCode(row[2] != null ? row[2].toString() : "");
             item.setBatchNo(row[3] != null ? row[3].toString() : "");
             item.setDateOfExpire(toDate(row[4]));
-            double qty    = toDouble(row[5]);
-            double units  = toDouble(row[6]);
-            double rate   = toDouble(row[7]);
-            double net    = toDouble(row[8]);
-            double prRate = toDouble(row[9]);
-            double rrRate = toDouble(row[10]);
-            double crRate = toDouble(row[11]);
+            double qty    = CommonFunctions.toDouble(row[5]);
+            double units  = CommonFunctions.toDouble(row[6]);
+            double rate   = CommonFunctions.toDouble(row[7]);
+            double net    = CommonFunctions.toDouble(row[8]);
+            double prRate = CommonFunctions.toDouble(row[9]);
+            double rrRate = CommonFunctions.toDouble(row[10]);
+            double crRate = CommonFunctions.toDouble(row[11]);
             item.setQty(qty);
             item.setQtyInUnits(units);
             item.setRate(rate);
@@ -711,8 +712,8 @@ public class TransferReceiveNativeSqlService {
                 .setParameter(2, issuedBillId)
                 .getSingleResult();
 
-        double totalIssued = toDouble(row[0]);
-        double totalReceived = toDouble(row[1]);
+        double totalIssued = CommonFunctions.toDouble(row[0]);
+        double totalReceived = CommonFunctions.toDouble(row[1]);
 
         if (totalIssued <= 0) {
             return false;
@@ -745,8 +746,8 @@ public class TransferReceiveNativeSqlService {
                 .setParameter(2, issuedBillId)
                 .getSingleResult();
 
-        double totalIssued = toDouble(row[0]);
-        double totalReceived = toDouble(row[1]);
+        double totalIssued = CommonFunctions.toDouble(row[0]);
+        double totalReceived = CommonFunctions.toDouble(row[1]);
 
         if (totalIssued > 0 && totalReceived >= totalIssued - 0.001) {
             String updateSql = "UPDATE " + billTable()
@@ -897,24 +898,20 @@ public class TransferReceiveNativeSqlService {
                 .setParameter(9, itemId)
                 .getSingleResult();
 
-        r.setDepartmentItemStock(toDouble(itemRow[0]));
-        r.setInstitutionItemStock(toDouble(itemRow[1]));
-        r.setTotalItemStock(toDouble(itemRow[2]));
-        r.setItemStockValueAtPurchaseRate(toDouble(itemRow[3]));
-        r.setInstitutionItemStockValueAtPurchaseRate(toDouble(itemRow[4]));
-        r.setTotalItemStockValueAtPurchaseRate(toDouble(itemRow[5]));
-        r.setItemStockValueAtCostRate(toDouble(itemRow[6]));
-        r.setInstitutionItemStockValueAtCostRate(toDouble(itemRow[7]));
-        r.setTotalItemStockValueAtCostRate(toDouble(itemRow[8]));
-        r.setItemStockValueAtSaleRate(toDouble(itemRow[9]));
-        r.setInstitutionItemStockValueAtSaleRate(toDouble(itemRow[10]));
-        r.setTotalItemStockValueAtSaleRate(toDouble(itemRow[11]));
+        r.setDepartmentItemStock(CommonFunctions.toDouble(itemRow[0]));
+        r.setInstitutionItemStock(CommonFunctions.toDouble(itemRow[1]));
+        r.setTotalItemStock(CommonFunctions.toDouble(itemRow[2]));
+        r.setItemStockValueAtPurchaseRate(CommonFunctions.toDouble(itemRow[3]));
+        r.setInstitutionItemStockValueAtPurchaseRate(CommonFunctions.toDouble(itemRow[4]));
+        r.setTotalItemStockValueAtPurchaseRate(CommonFunctions.toDouble(itemRow[5]));
+        r.setItemStockValueAtCostRate(CommonFunctions.toDouble(itemRow[6]));
+        r.setInstitutionItemStockValueAtCostRate(CommonFunctions.toDouble(itemRow[7]));
+        r.setTotalItemStockValueAtCostRate(CommonFunctions.toDouble(itemRow[8]));
+        r.setItemStockValueAtSaleRate(CommonFunctions.toDouble(itemRow[9]));
+        r.setInstitutionItemStockValueAtSaleRate(CommonFunctions.toDouble(itemRow[10]));
+        r.setTotalItemStockValueAtSaleRate(CommonFunctions.toDouble(itemRow[11]));
 
         return r;
-    }
-
-    private static double toDouble(Object o) {
-        return o == null ? 0.0 : ((Number) o).doubleValue();
     }
 
     /**
