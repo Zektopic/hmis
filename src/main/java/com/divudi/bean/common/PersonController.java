@@ -43,7 +43,10 @@ public class PersonController implements Serializable {
     String selectText = "";
 
     public List<Person> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Person c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        // Fix JPQL Injection
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("n", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Person c where c.retired=false and upper(c.name) like :n order by c.name", m);
         return selectedItems;
     }
 
@@ -54,8 +57,11 @@ public class PersonController implements Serializable {
     public List<Person> completePerson(String qry) {
         List<Person> a = null;
         if (qry != null) {
+            // Fix JPQL Injection
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("n", "%" + qry.toUpperCase() + "%");
             a = getFacade().findByJpql("select c from Person c where c.retired=false and "
-                    + "  (c.name) like '%" + qry.toUpperCase() + "%' order by c.name", 20);
+                    + "  upper(c.name) like :n order by c.name", m, 20);
         }
         if (a == null) {
             a = new ArrayList<Person>();
