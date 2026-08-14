@@ -1544,6 +1544,21 @@ public class UserManagementApi {
         if (ids == null || ids.isEmpty()) {
             throw new ApiValidationException("departmentIds is required and must be non-empty", 400);
         }
+
+        Map<Long, Department> deptMap = new HashMap<>();
+        int chunkSize = 500;
+        for (int i = 0; i < ids.size(); i += chunkSize) {
+            List<Long> chunk = ids.subList(i, Math.min(ids.size(), i + chunkSize));
+            Map<String, Object> params = new HashMap<>();
+            params.put("ids", chunk);
+            List<Department> chunkDepts = departmentFacade.findByJpql("select d from Department d where d.id in :ids", params);
+            if (chunkDepts != null) {
+                for (Department d : chunkDepts) {
+                    deptMap.put(d.getId(), d);
+                }
+            }
+        }
+
         List<Department> depts = new ArrayList<>();
         Map<Long, Department> deptMap = new HashMap<>();
 
