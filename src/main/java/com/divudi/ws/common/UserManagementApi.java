@@ -785,18 +785,22 @@ public class UserManagementApi {
             // Determine target departments
             List<Department> targetDepts = new ArrayList<>();
             if (!requestedDeptIds.isEmpty()) {
-                Map<String, Object> deptParams = new HashMap<>();
-                deptParams.put("ids", requestedDeptIds);
-                List<Department> fetchedDepts = departmentFacade.findByJpql(
-                        "select d from Department d where d.id in :ids", deptParams);
-                Map<Long, Department> deptMap = new HashMap<>();
-                for (Department d : fetchedDepts) {
-                    deptMap.put(d.getId(), d);
-                }
-                for (Long deptId : requestedDeptIds) {
-                    Department dept = deptMap.get(deptId);
-                    if (dept == null) return errorResponse("Department not found: " + deptId, 404);
-                    targetDepts.add(dept);
+                for (int i = 0; i < requestedDeptIds.size(); i += 500) {
+                    List<Long> chunk = requestedDeptIds.subList(i, Math.min(requestedDeptIds.size(), i + 500));
+                    Map<String, Object> deptParams = new HashMap<>();
+                    deptParams.put("ids", chunk);
+                    List<Department> departments = departmentFacade.findByJpql("select d from Department d where d.id in :ids", deptParams);
+                    Map<Long, Department> deptMap = new HashMap<>();
+                    if (departments != null) {
+                        for (Department dept : departments) {
+                            deptMap.put(dept.getId(), dept);
+                        }
+                    }
+                    for (Long deptId : chunk) {
+                        Department dept = deptMap.get(deptId);
+                        if (dept == null) return errorResponse("Department not found: " + deptId, 404);
+                        targetDepts.add(dept);
+                    }
                 }
             } else {
                 List<WebUserDepartment> userDepts = webUserDepartmentFacade.findByJpql(
