@@ -55,15 +55,16 @@ public class PharmacyBatchApi {
     @Inject
     private PharmacyBatchApiService batchService;
 
-    private static final ThreadLocal<SimpleDateFormat[]> DATE_FORMATTERS = ThreadLocal.withInitial(() -> {
-        SimpleDateFormat[] formatters = new SimpleDateFormat[3];
-        formatters[0] = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        formatters[0].setLenient(false);
-        formatters[1] = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
-        formatters[1].setLenient(false);
-        formatters[2] = new SimpleDateFormat("yyyy-MM-dd");
-        formatters[2].setLenient(false);
-        return formatters;
+    private static final ThreadLocal<SimpleDateFormat[]> DATE_FORMATS = ThreadLocal.withInitial(() -> {
+        SimpleDateFormat[] formats = new SimpleDateFormat[]{
+                new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"),
+                new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"),
+                new SimpleDateFormat("yyyy-MM-dd")
+        };
+        for (SimpleDateFormat f : formats) {
+            f.setLenient(false);
+        }
+        return formats;
     });
 
     // Support multiple date formats for expiryDate and other Date fields
@@ -78,7 +79,7 @@ public class PharmacyBatchApi {
 
         String value = s.trim();
 
-        for (SimpleDateFormat sdf : DATE_FORMATTERS.get()) {
+        for (SimpleDateFormat sdf : DATE_FORMATS.get()) {
             try {
                 return sdf.parse(value);
             } catch (ParseException ignored) {
