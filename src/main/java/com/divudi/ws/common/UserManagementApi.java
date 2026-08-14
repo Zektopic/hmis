@@ -785,8 +785,16 @@ public class UserManagementApi {
             // Determine target departments
             List<Department> targetDepts = new ArrayList<>();
             if (!requestedDeptIds.isEmpty()) {
+                Map<String, Object> deptParams = new HashMap<>();
+                deptParams.put("ids", requestedDeptIds);
+                List<Department> fetchedDepts = departmentFacade.findByJpql(
+                        "select d from Department d where d.id in :ids", deptParams);
+                Map<Long, Department> deptMap = new HashMap<>();
+                for (Department d : fetchedDepts) {
+                    deptMap.put(d.getId(), d);
+                }
                 for (Long deptId : requestedDeptIds) {
-                    Department dept = departmentFacade.find(deptId);
+                    Department dept = deptMap.get(deptId);
                     if (dept == null) return errorResponse("Department not found: " + deptId, 404);
                     targetDepts.add(dept);
                 }
