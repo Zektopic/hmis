@@ -82,7 +82,7 @@ public class MembershipSchemeController implements Serializable {
     public List<MembershipScheme> completeMembershipScheme(String qry) {
         List<MembershipScheme> c;
         HashMap hm = new HashMap();
-        String sql = "select c from MembershipScheme c where c.retired=false and (c.name) "
+        String sql = "select c from MembershipScheme c where c.retired=false and upper(c.name) "
                 + " like :q order by c.name";
         hm.put("q", "%" + qry.toUpperCase() + "%");
         c = getFacade().findByJpql(sql, hm);
@@ -94,7 +94,10 @@ public class MembershipSchemeController implements Serializable {
     }
 
     public List<MembershipScheme> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from MembershipScheme c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        HashMap hm = new HashMap();
+        String sql = "select c from MembershipScheme c where c.retired=false and upper(c.name) like :q order by c.name";
+        hm.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, hm);
         return selectedItems;
     }
 
