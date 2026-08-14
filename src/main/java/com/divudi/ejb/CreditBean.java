@@ -375,11 +375,6 @@ public class CreditBean {
         HashMap hm;
         sql = "Select b From PatientEncounter b "
                 + " where b.retired=false ";
-//        if (lessThan) {
-//            sql += " and (abs(b.creditUsedAmount)-abs(b.creditPaidAmount)) >:val ";
-//        } else {
-//            sql += " and (abs(b.creditUsedAmount)-abs(b.creditPaidAmount)) <:val ";
-//        }
         if (lessThan) {
             sql += " and (abs(b.finalBill.netTotal)-(abs(b.creditPaidAmount)+abs(b.finalBill.paidAmount))) >=:val ";
         } else {
@@ -490,11 +485,6 @@ public class CreditBean {
                 + " and b.discharged=true "
                 + " and b.paymentMethod=:pm ";
 
-//        if (lessThan) {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)> :val ";
-//        } else {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)< :val ";
-//        }
         if (lessThan) {
             sql += " and (abs(b.finalBill.netTotal)-(abs(b.creditPaidAmount)+abs(b.finalBill.paidAmount))) >:val ";
         } else {
@@ -518,11 +508,6 @@ public class CreditBean {
                 + " and b.discharged=true "
                 + " and b.paymentMethod=:pm ";
 
-//        if (lessThan) {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)> :val ";
-//        } else {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)< :val ";
-//        }
         if (lessThan) {
             sql += " and (abs(b.finalBill.netTotal)-(abs(b.creditPaidAmount)+abs(b.finalBill.paidAmount))) >:val ";
         } else {
@@ -639,11 +624,6 @@ public class CreditBean {
         sql = "Select distinct(b.creditCompany)"
                 + " From PatientEncounter b "
                 + " where b.retired=false ";
-//        if (lessThan) {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount) >:val ";
-//        } else {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount) <:val ";
-//        }
         if (lessThan) {
             sql += " and (abs(b.finalBill.netTotal)-(abs(b.creditPaidAmount)+abs(b.finalBill.paidAmount))) >=:val ";
         } else {
@@ -1213,11 +1193,6 @@ public class CreditBean {
                 + " and b.paymentMethod=:pm "
                 + " and (b.creditCompany=:ins ) ";
 
-//        if (lessThan) {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)> :val ";
-//        } else {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)< :val ";
-//        }
         if (lessThan) {
             sql += " and (abs(b.finalBill.netTotal)-(abs(b.creditPaidAmount)+abs(b.finalBill.paidAmount))) >:val ";
         } else {
@@ -1241,11 +1216,6 @@ public class CreditBean {
                 + " and b.paymentMethod=:pm "
                 + " and (b.creditCompany=:ins ) ";
 
-//        if (lessThan) {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)> :val ";
-//        } else {
-//            sql += " and abs(b.creditUsedAmount)-abs(b.creditPaidAmount)< :val ";
-//        }
         if (lessThan) {
             sql += " and (abs(b.finalBill.netTotal)-(abs(b.creditPaidAmount)+abs(b.finalBill.paidAmount))) >:val ";
         } else {
