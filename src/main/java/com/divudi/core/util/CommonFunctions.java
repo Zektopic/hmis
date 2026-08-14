@@ -1198,4 +1198,8 @@ public class CommonFunctions {
 
         return rowDate.equals(filterDate);
     }
+
+    public static double toDouble(Object o) {
+        return o == null ? 0.0 : ((Number) o).doubleValue();
+    }
 }
