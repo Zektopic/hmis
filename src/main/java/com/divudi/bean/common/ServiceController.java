@@ -283,9 +283,11 @@ public class ServiceController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<Service>();
         } else {
-            sql = "select c from Service c where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
+            sql = "select c from Service c where c.retired=false and upper(c.name) like :q order by c.name";
             //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
@@ -294,7 +296,10 @@ public class ServiceController implements Serializable {
         if (selectText.trim().isEmpty()) {
             selectedItems = getFacade().findByJpql("select c from Service c where c.retired=false order by c.name");
         } else {
-            selectedItems = getFacade().findByJpql("select c from Service c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+            String sql = "select c from Service c where c.retired=false and upper(c.name) like :q order by c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + getSelectText().toUpperCase() + "%");
+            selectedItems = getFacade().findByJpql(sql, m);
         }
         return selectedItems;
     }
@@ -303,7 +308,10 @@ public class ServiceController implements Serializable {
         if (selectRetiredText.trim().isEmpty()) {
             selectedRetiredItems = getFacade().findByJpql("select c from Service c where c.retired=true order by c.name");
         } else {
-            selectedRetiredItems = getFacade().findByJpql("select c from Service c where c.retired=true and (c.name) like '%" + getSelectRetiredText().toUpperCase() + "%' order by c.name");
+            String sql = "select c from Service c where c.retired=true and upper(c.name) like :q order by c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + getSelectRetiredText().toUpperCase() + "%");
+            selectedRetiredItems = getFacade().findByJpql(sql, m);
         }
         return selectedRetiredItems;
     }
@@ -334,10 +342,13 @@ public class ServiceController implements Serializable {
     }
 
     public List<Service> completeItem(String qry) {
-        List<Service> completeItems = getFacade().findByJpql("select c from Item c "
+        String sql = "select c from Item c "
                 + " where ( type(c) = Service or type(c) = Packege ) "
-                + " and c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%'"
-                + "  order by c.name");
+                + " and c.retired=false and upper(c.name) like :q"
+                + "  order by c.name";
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + qry.toUpperCase() + "%");
+        List<Service> completeItems = getFacade().findByJpql(sql, m);
         return completeItems;
     }
 
@@ -924,11 +935,14 @@ public class ServiceController implements Serializable {
         String sql;
         if (selectText.isEmpty()) {
             sql = "select c from Service c where c.retired=false order by c.category.name,c.name";
+            items = getFacade().findByJpql(sql);
         } else {
-            sql = "select c from Service c where c.retired=false and (c.name) like '%" + selectText.toUpperCase() + "%' order by c.category.name,c.name";
+            sql = "select c from Service c where c.retired=false and upper(c.name) like :q order by c.category.name,c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + selectText.toUpperCase() + "%");
+            items = getFacade().findByJpql(sql, m);
         }
         //////// // System.out.println(sql);
-        items = getFacade().findByJpql(sql);
 
         if (items == null) {
             items = new ArrayList<Service>();
