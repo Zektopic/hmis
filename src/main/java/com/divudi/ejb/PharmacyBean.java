@@ -1683,16 +1683,6 @@ public class PharmacyBean {
             return false;
         }
 
-        // This is wrong. We can not alter the item referance of the bill item. It is something entered by the user.
-//        if (pbi != null && pbi.getBillItem() != null && pbi.getBillItem().getItem() != null) {
-//            Item originalItem = pbi.getBillItem().getItem();
-//            if (originalItem instanceof Ampp) {
-//                Item amp = ((Ampp) originalItem).getAmp();
-//                if (amp != null) {
-//                    pbi.getBillItem().setItem(amp);
-//                }
-//            }
-//        }
         // Atomic check-and-decrement via JPQL UPDATE to prevent TOCTOU races
         // where the in-memory Stock is stale vs the committed DB value (issue:
         // Cetapin XR 500mg batch 1528539 went to -144 on 2025-10-12).
