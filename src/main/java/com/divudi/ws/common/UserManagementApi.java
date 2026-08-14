@@ -1537,15 +1537,30 @@ public class UserManagementApi {
             throw new ApiValidationException("departmentIds is required and must be non-empty", 400);
         }
         List<Department> depts = new ArrayList<>();
+        Map<Long, Department> deptMap = new HashMap<>();
+
+        int batchSize = 500;
+        for (int i = 0; i < ids.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, ids.size());
+            List<Long> chunk = ids.subList(i, end);
+            Map<String, Object> params = new HashMap<>();
+            params.put("ids", chunk);
+            List<Department> batchDepts = departmentFacade.findByJpql("select d from Department d where d.id in :ids", params);
+            for (Department d : batchDepts) {
+                deptMap.put(d.getId(), d);
+            }
+        }
+
         List<Long> invalid = new ArrayList<>();
         for (Long deptId : ids) {
-            Department d = departmentFacade.find(deptId);
+            Department d = deptMap.get(deptId);
             if (d == null) {
                 invalid.add(deptId);
             } else {
                 depts.add(d);
             }
         }
+
         if (!invalid.isEmpty()) {
             throw new ApiValidationException("Department(s) not found: " + invalid, 404);
         }
