@@ -1520,7 +1520,9 @@ public class StoreBean implements Serializable {
         }
         name = name.trim();
         PharmaceuticalItemCategory cat;
-        cat = getPharmaceuticalItemCategoryFacade().findFirstByJpql("SELECT c FROM PharmaceuticalItemCategory c Where (c.name) = '" + name.toUpperCase() + "' ");
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", name.toUpperCase());
+        cat = getPharmaceuticalItemCategoryFacade().findFirstByJpql("SELECT c FROM PharmaceuticalItemCategory c Where upper(c.name) = :name", map);
         if (cat == null && createNew == true) {
             cat = new PharmaceuticalItemCategory();
             cat.setName(name);
@@ -1539,7 +1541,9 @@ public class StoreBean implements Serializable {
         }
         name = name.trim();
         StoreItemCategory cat;
-        cat = getStoreItemCategoryFacade().findFirstByJpql("SELECT c FROM StoreItemCategory c Where (c.name) = '" + name.toUpperCase() + "' ");
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", name.toUpperCase());
+        cat = getStoreItemCategoryFacade().findFirstByJpql("SELECT c FROM StoreItemCategory c Where upper(c.name) = :name", map);
         if (cat == null && createNew == true) {
             cat = new StoreItemCategory();
             cat.setName(name);
