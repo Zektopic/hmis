@@ -39,7 +39,9 @@ public class BankController implements Serializable {
     String selectText = "";
 
     public List<Institution> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Institution c where c.retired=false and i.institutionType = com.divudi.core.data.InstitutionType.Bank and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Institution c where c.retired=false and c.institutionType = com.divudi.core.data.InstitutionType.Bank and upper(c.name) like :q order by c.name", m);
         return selectedItems;
     }
 
