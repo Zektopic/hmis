@@ -299,9 +299,10 @@ public class CategoryController implements Serializable {
             suggestions = new ArrayList<>();
         } else {
 
-            sql = "select c from Category c where c.retired=false and type(c)= :cat and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
+            sql = "select c from Category c where c.retired=false and type(c)= :cat and upper(c.name) like :q order by c.name";
             //////// // System.out.println(sql);
             tmpMap.put("cat", InvestigationCategory.class);
+            tmpMap.put("q", "%" + query.toUpperCase() + "%");
             suggestions = getFacade().findByJpql(sql, tmpMap, TemporalType.TIMESTAMP);
         }
         return suggestions;
@@ -315,11 +316,12 @@ public class CategoryController implements Serializable {
             suggestions = new ArrayList<>();
         } else {
 
-            sql = "select c from Category c where c.retired=false and (type(c)= :sup or type(c)= :sub or type(c)= :inv) and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
+            sql = "select c from Category c where c.retired=false and (type(c)= :sup or type(c)= :sub or type(c)= :inv) and upper(c.name) like :q order by c.name";
             //////// // System.out.println(sql);
             tmpMap.put("sup", ServiceCategory.class);
             tmpMap.put("sub", ServiceSubCategory.class);
             tmpMap.put("inv", InvestigationCategory.class);
+            tmpMap.put("q", "%" + query.toUpperCase() + "%");
             suggestions = getFacade().findByJpql(sql, tmpMap, TemporalType.TIMESTAMP);
         }
         return suggestions;
@@ -566,7 +568,10 @@ public class CategoryController implements Serializable {
     }
 
     public List<Category> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Category c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        String sql = "select c from Category c where c.retired=false and upper(c.name) like :q order by c.name";
+        Map<String, Object> m = new HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, m);
         return selectedItems;
     }
 
