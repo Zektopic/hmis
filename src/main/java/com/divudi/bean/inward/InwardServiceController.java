@@ -122,9 +122,11 @@ public class InwardServiceController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
-            sql = "select c from InwardService c where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
+            sql = "select c from InwardService c where c.retired=false and upper(c.name) like :q order by c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
             //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
@@ -133,7 +135,9 @@ public class InwardServiceController implements Serializable {
         if (selectText.trim().equals("")) {
             selectedItems = getFacade().findByJpql("select c from InwardService c where c.retired=false order by c.name");
         } else {
-            selectedItems = getFacade().findByJpql("select c from InwardService c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + getSelectText().toUpperCase() + "%");
+            selectedItems = getFacade().findByJpql("select c from InwardService c where c.retired=false and upper(c.name) like :q order by c.name", m);
         }
         return selectedItems;
     }
@@ -164,7 +168,9 @@ public class InwardServiceController implements Serializable {
     }
 
     public List<InwardService> completeItem(String qry) {
-        List<InwardService> completeItems = getFacade().findByJpql("select c from Item c where ( type(c) = InwardService or type(c) = Packege ) and c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + qry.toUpperCase() + "%");
+        List<InwardService> completeItems = getFacade().findByJpql("select c from Item c where ( type(c) = InwardService or type(c) = Packege ) and c.retired=false and upper(c.name) like :q order by c.name", m);
         return completeItems;
     }
 
@@ -405,11 +411,14 @@ public class InwardServiceController implements Serializable {
         String sql;
         if (selectText.isEmpty()) {
             sql = "select c from InwardService c where c.retired=false order by c.category.name,c.name";
+            items = getFacade().findByJpql(sql);
         } else {
-            sql = "select c from InwardService c where c.retired=false and (c.name) like '%" + selectText.toUpperCase() + "%' order by c.category.name,c.name";
+            sql = "select c from InwardService c where c.retired=false and upper(c.name) like :q order by c.category.name,c.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + selectText.toUpperCase() + "%");
+            items = getFacade().findByJpql(sql, m);
         }
         //////// // System.out.println(sql);
-        items = getFacade().findByJpql(sql);
 
         if (items == null) {
             items = new ArrayList<InwardService>();
