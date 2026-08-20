@@ -566,7 +566,9 @@ public class CategoryController implements Serializable {
     }
 
     public List<Category> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Category c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Category c where c.retired=false and upper(c.name) like :q order by c.name", m);
         return selectedItems;
     }
 
