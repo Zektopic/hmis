@@ -48,7 +48,9 @@ public class PatientRoomController implements Serializable {
     }
 
     public List<PatientRoom> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from PatientRoom c where c.retired=false and i.patientRoomType = com.divudi.core.data.PatientRoomType.Pharmacy and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from PatientRoom c where c.retired=false and c.patientRoomType = com.divudi.core.data.PatientRoomType.Pharmacy and upper(c.name) like :q order by c.name", m);
         return selectedItems;
     }
 
