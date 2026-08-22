@@ -42,11 +42,13 @@ public  class PackageNameController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
+            // Sentinel: Fix JPQL Injection (Raw string concatenation replaced with named parameters)
             sql = "select p from Packege p where p.retired=false "
                     + "and (p.inactive=false or p.inactive is null)"
-                    + "and ((p.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.name";
-            //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+                    + "and (upper(p.name) like :q or upper(p.code) like :q ) order by p.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
