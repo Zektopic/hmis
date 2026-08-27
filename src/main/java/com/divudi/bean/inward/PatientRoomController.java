@@ -48,9 +48,11 @@ public class PatientRoomController implements Serializable {
     }
 
     public List<PatientRoom> getSelectedItems() {
+        // Sentinel: Prevent SQL injection by parameterizing the query and correct invalid alias
+        String jpql = "select c from PatientRoom c where c.retired=false and c.patientRoomType = com.divudi.core.data.PatientRoomType.Pharmacy and upper(c.name) like :q order by c.name";
         java.util.Map<String, Object> m = new java.util.HashMap<>();
         m.put("q", "%" + getSelectText().toUpperCase() + "%");
-        selectedItems = getFacade().findByJpql("select c from PatientRoom c where c.retired=false and c.patientRoomType = com.divudi.core.data.PatientRoomType.Pharmacy and upper(c.name) like :q order by c.name", m);
+        selectedItems = getFacade().findByJpql(jpql, m);
         return selectedItems;
     }
 
