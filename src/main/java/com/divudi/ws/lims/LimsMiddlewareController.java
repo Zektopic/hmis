@@ -1638,8 +1638,12 @@ public class LimsMiddlewareController {
         dl = ii.getName();
 
         long ageInDays = com.divudi.core.util.CommonFunctions.calculateAgeInDays(p.getPerson().getDob(), Calendar.getInstance().getTime());
-        sql = "select f from InvestigationItemValueFlag f where  f.fromAge < " + ageInDays + " and f.toAge > " + ageInDays + " and f.investigationItemOfLabelType.id = " + ii.getId();
-        List<InvestigationItemValueFlag> fs = iivfFacade.findByJpql(sql);
+        // SECURITY: Parameterize JPQL to prevent SQL injection
+        sql = "select f from InvestigationItemValueFlag f where f.fromAge < :age and f.toAge > :age and f.investigationItemOfLabelType.id = :id";
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("age", ageInDays);
+        m.put("id", ii.getId());
+        List<InvestigationItemValueFlag> fs = iivfFacade.findByJpql(sql, m);
         for (InvestigationItemValueFlag f : fs) {
             if (f.getSex() == p.getPerson().getSex()) {
                 dl = f.getFlagMessage();
