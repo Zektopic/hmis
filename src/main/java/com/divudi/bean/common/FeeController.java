@@ -46,10 +46,9 @@ public class FeeController implements Serializable {
     String selectText = "";
 
     public List<Fee> getSelectedItems() {
-        // Fix SQL injection by parameterizing user input
         java.util.Map<String, Object> m = new java.util.HashMap<>();
-        m.put("q", "%" + getSelectText().toUpperCase() + "%");
-        selectedItems = getFacade().findByJpql("select c from Fee c where c.retired=false and upper(c.name) like :q order by c.name", m);
+        m.put("param", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Fee c where c.retired=false and upper(c.name) like :param order by c.name", m);
         return selectedItems;
     }
 
