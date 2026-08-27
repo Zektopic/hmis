@@ -454,25 +454,34 @@ public class BhtEditController implements Serializable, ControllerWithPatient {
     }
 
     public List<Admission> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Admission c where c.retired=false and c.discharged!=true and (c.bhtNo) like '%" + getSelectText().toUpperCase() + "%' or (c.patient.person.name) like '%" + getSelectText().toUpperCase() + "%' order by c.bhtNo");
+        String sql = "select c from Admission c "
+                + " where c.retired=false "
+                + " and c.discharged!=true "
+                + " and (upper(c.bhtNo) like :q "
+                + " or upper(c.patient.person.name) like :q) "
+                + " order by c.bhtNo";
+        java.util.Map<String, Object> h = new java.util.HashMap<>();
+        h.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, h);
         return selectedItems;
     }
 
     public List<Admission> completePatient(String query) {
         List<Admission> suggestions;
         String sql;
-        HashMap h = new HashMap();
+        java.util.Map<String, Object> h = new java.util.HashMap<>();
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
             sql = "select c from Admission c "
                     + " where c.retired=false "
                     + " and c.discharged=false "
-                    + " and ((c.bhtNo) like '%" + query.toUpperCase() + "%' "
-                    + " or (c.patient.person.name) like '%" + query.toUpperCase() + "%' "
-                    + " or (c.patient.phn) =:q )"
+                    + " and (upper(c.bhtNo) like :qLike "
+                    + " or upper(c.patient.person.name) like :qLike "
+                    + " or c.patient.phn = :q )"
                     + " order by c.bhtNo";
 
+            h.put("qLike", "%" + query.toUpperCase() + "%");
             h.put("q", query.toUpperCase());
             suggestions = getFacade().findByJpql(sql, h, 20);
         }
@@ -498,15 +507,17 @@ public class BhtEditController implements Serializable, ControllerWithPatient {
     public List<Admission> completePatientAll(String query) {
         List<Admission> suggestions;
         String sql;
+        java.util.Map<String, Object> h = new java.util.HashMap<>();
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
             sql = "select c from Admission c where "
                     + " c.retired=false "
                     //                    + " and c.discharged=false "
-                    + " and ((c.bhtNo) like '%" + query.toUpperCase() + "%' or (c.patient.person.name) like '%" + query.toUpperCase() + "%') "
+                    + " and (upper(c.bhtNo) like :q or upper(c.patient.person.name) like :q) "
                     + " order by c.bhtNo ";
-            suggestions = getFacade().findByJpql(sql);
+            h.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, h);
         }
         return suggestions;
     }
