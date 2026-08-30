@@ -90,8 +90,11 @@ public class InstitutionBranchController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
-            sql = "select p from Institution p where p.retired=false and p.institutionType=com.divudi.core.data.InstitutionType.CreditCompany and (p.name) like '%" + query.toUpperCase() + "%' order by p.name";
-            suggestions = getFacade().findByJpql(sql);
+            // Security Fix: Replaced raw string concatenation with parameterized query to prevent JPQL injection
+            sql = "select p from Institution p where p.retired=false and p.institutionType=com.divudi.core.data.InstitutionType.CreditCompany and upper(p.name) like :q order by p.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
