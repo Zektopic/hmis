@@ -142,7 +142,8 @@ public class AttendanceUploadController implements Serializable {
 //            InputStream in;
 //            in = file.getInputStream();
 //            File f;
-//            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+//            // Sentinel Security Fix: Sanitize filename to prevent path traversal
+//            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
 //            FileOutputStream out;
 //            out = new FileOutputStream(f);
 //            int read;
@@ -258,7 +259,8 @@ public class AttendanceUploadController implements Serializable {
             InputStream in;
             in = file.getInputStream();
             File f;
-            f = new File(Calendar.getInstance().getTimeInMillis() + file.getFileName());
+            // Sentinel Security Fix: Sanitize filename to prevent path traversal
+            f = new File(Calendar.getInstance().getTimeInMillis() + java.nio.file.Paths.get(file.getFileName()).getFileName().toString());
             FileOutputStream out;
             out = new FileOutputStream(f);
             int read;
