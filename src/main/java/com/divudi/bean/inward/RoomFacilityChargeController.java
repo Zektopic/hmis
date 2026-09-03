@@ -186,9 +186,11 @@ public class RoomFacilityChargeController implements Serializable {
 //        return suggestions;
 //    }
     public List<RoomFacilityCharge> getSelectedItems() {
+        // SECURITY: Parameterize JPQL query to prevent injection
+        java.util.Map<String, Object> hm = new java.util.HashMap<>();
+        hm.put("q", "%" + getSelectText().toUpperCase() + "%");
         selectedItems = getFacade().findByJpql("select c from RoomFacilityCharge c "
-                + "where c.retired=false  and (c.name)"
-                + " like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+                + "where c.retired=false and upper(c.name) like :q order by c.name", hm);
         return selectedItems;
     }
 
