@@ -307,16 +307,20 @@ public class WebUserController implements Serializable {
     public List<WebUser> completeUser(String qry) {
         List<WebUser> a = null;
         if (qry != null) {
-            a = getFacade().findByJpql("select c from WebUser c"
+            // Security fix: Parameterized query to prevent JPQL injection via qry concatenation
+            String jpql = "select c from WebUser c"
                     + " where c.retired=false"
                     + " and  ("
-                    + " c.webUserPerson.name like '%" + qry.toUpperCase() + "%'"
+                    + " upper(c.webUserPerson.name) like :q"
                     + " or "
-                    + " c.code like '%" + qry.toUpperCase() + "%'"
+                    + " upper(c.code) like :q"
                     + " or"
-                    + " c.name like '%" + qry.toUpperCase() + "%'"
+                    + " upper(c.name) like :q"
                     + " )"
-                    + " order by c.webUserPerson.name");
+                    + " order by c.webUserPerson.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + qry.toUpperCase() + "%");
+            a = getFacade().findByJpql(jpql, m);
         }
         if (a == null) {
             a = new ArrayList<>();
