@@ -43,8 +43,8 @@ public  class TimedItemCategoryController implements Serializable {
 
     public List<TimedItemCategory> getSelectedItems() {
         java.util.Map<String, Object> m = new java.util.HashMap<>();
-        m.put("q", "%" + getSelectText().toUpperCase() + "%");
-        selectedItems = getFacade().findByJpql("select c from TimedItemCategory c where c.retired=false and upper(c.name) like :q order by c.name", m);
+        m.put("n", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from TimedItemCategory c where c.retired=false and upper(c.name) like :n order by c.name", m);
         return selectedItems;
     }
 
