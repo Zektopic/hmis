@@ -75,7 +75,11 @@ public class StoreController implements Serializable {
     }
 
     public List<Department> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Department c where c.retired=false and i.departmentType = com.divudi.core.data.DepartmentType.Store and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        // Security fix: Parameterize user input to prevent JPQL injection and fix alias typo
+        String jpql = "select c from Department c where c.retired=false and c.departmentType = com.divudi.core.data.DepartmentType.Store and upper(c.name) like :q order by c.name";
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(jpql, m);
         return selectedItems;
     }
 
