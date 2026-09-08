@@ -129,7 +129,9 @@ public class TheatreServiceController implements Serializable {
         if (selectText.trim().equals("")) {
             selectedItems = getTheatreServiceFacade().findByJpql("select c from TheatreService c where c.retired=false order by c.name");
         } else {
-            selectedItems = getTheatreServiceFacade().findByJpql("select c from TheatreService c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("qry", "%" + getSelectText().toUpperCase() + "%");
+            selectedItems = getTheatreServiceFacade().findByJpql("select c from TheatreService c where c.retired=false and upper(c.name) like :qry order by c.name", m);
         }
         return selectedItems;
     }
@@ -161,7 +163,9 @@ public class TheatreServiceController implements Serializable {
     }
 
     public List<TheatreService> completeItem(String qry) {
-        List<TheatreService> completeItems = getTheatreServiceFacade().findByJpql("select c from Item c where ( type(c) = TheatreService or type(c) = Packege ) and c.retired=false and (c.name) like '%" + qry.toUpperCase() + "%' order by c.name");
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("qry", "%" + qry.toUpperCase() + "%");
+        List<TheatreService> completeItems = getTheatreServiceFacade().findByJpql("select c from Item c where ( type(c) = TheatreService or type(c) = Packege ) and c.retired=false and upper(c.name) like :qry order by c.name", m);
         return completeItems;
     }
 
@@ -400,13 +404,16 @@ public class TheatreServiceController implements Serializable {
 
     public List<TheatreService> getItem() {
         String sql;
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
         if (selectText.isEmpty()) {
             sql = "select c from TheatreService c where c.retired=false order by c.category.name,c.name";
+            items = getTheatreServiceFacade().findByJpql(sql);
         } else {
-            sql = "select c from TheatreService c where c.retired=false and (c.name) like '%" + selectText.toUpperCase() + "%' order by c.category.name,c.name";
+            sql = "select c from TheatreService c where c.retired=false and upper(c.name) like :qry order by c.category.name,c.name";
+            m.put("qry", "%" + selectText.toUpperCase() + "%");
+            items = getTheatreServiceFacade().findByJpql(sql, m);
         }
         //////// // System.out.println(sql);
-        items = getTheatreServiceFacade().findByJpql(sql);
 
         if (items == null) {
             items = new ArrayList<TheatreService>();
