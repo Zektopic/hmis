@@ -63,13 +63,16 @@ public class ItemFeeController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<Staff>();
         } else {
+            // SECURITY: Fixing JPQL injection by using parameterized queries and upper() to correctly mimic the case-insensitive search logic.
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("query", "%" + query.toUpperCase() + "%");
             if (getCurrentFee().getSpeciality() == null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query) order by p.person.name";
             } else {
-                sql = "select p from Staff p where p.speciality.id=" + getCurrentFee().getSpeciality().getId() + " and p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.speciality.id=" + getCurrentFee().getSpeciality().getId() + " and p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query) order by p.person.name";
             }
             //////// // System.out.println(sql);
-            suggestions = getStaffFacade().findByJpql(sql);
+            suggestions = getStaffFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
