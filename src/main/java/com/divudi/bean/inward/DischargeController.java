@@ -72,7 +72,11 @@ public class DischargeController implements Serializable {
     private BillFacade billFacade;
 
     public List<Admission> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Admission c where c.retired=false and c.discharged!=true and (c.bhtNo) like '%" + getSelectText().toUpperCase() + "%' or (c.patient.person.name) like '%" + getSelectText().toUpperCase() + "%' order by c.bhtNo");
+        // Sentinel Security Fix: Parameterize JPQL query to prevent SQL/JPQL injection
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        String sql = "select c from Admission c where c.retired=false and c.discharged!=true and ((upper(c.bhtNo) like :q) or (upper(c.patient.person.name) like :q)) order by c.bhtNo";
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, m);
         return selectedItems;
     }
 
