@@ -50,11 +50,14 @@ public  class MedicalPackageNameController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<>();
         } else {
+            // Fix JPQL injection by parameterizing dynamic string concatenated inputs
             sql = "select p from MedicalPackage p where p.retired=false"
                     + " and (p.inactive=false or p.inactive is null)"
-                    + "and ((p.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.name";
+                    + " and (upper(p.name) like :q or upper(p.code) like :q) order by p.name";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
             //////// // System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
