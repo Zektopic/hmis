@@ -78,13 +78,18 @@ public class PackageItemFeeController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<Staff>();
         } else {
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            // Fix JPQL injection by parameterizing dynamic fields and strings
+            String q = "%" + query.toUpperCase() + "%";
+            m.put("q", q);
             if (getCurrentFee().getSpeciality() == null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q ) order by p.person.name";
             } else {
-                sql = "select p from Staff p where p.speciality.id=" + getCurrentFee().getSpeciality().getId() + " and p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+                sql = "select p from Staff p where p.speciality.id=:specialityId and p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q ) order by p.person.name";
+                m.put("specialityId", getCurrentFee().getSpeciality().getId());
             }
             //////// // System.out.println(sql);
-            suggestions = getStaffFacade().findByJpql(sql);
+            suggestions = getStaffFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
