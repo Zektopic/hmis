@@ -670,7 +670,11 @@ public class RoomChangeController implements Serializable {
     }
 
     public List<Admission> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Admission c where c.retired=false and c.discharged!=true and (c.bhtNo) like '%" + getSelectText().toUpperCase() + "%' or (c.patient.person.name) like '%" + getSelectText().toUpperCase() + "%' order by c.bhtNo");
+        // Sentinel Security Fix: Parameterized query to prevent JPQL injection and fix operator precedence
+        String sql = "select c from Admission c where c.retired=false and c.discharged!=true and (upper(c.bhtNo) like :q or upper(c.patient.person.name) like :q) order by c.bhtNo";
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        map.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql(sql, map);
         return selectedItems;
     }
 
