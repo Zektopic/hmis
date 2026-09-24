@@ -813,7 +813,10 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
 //
 //    }
     public List<Admission> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from Admission c where c.retired=false and (c.name) like '%" + getSelectText().toUpperCase() + "%' order by c.name");
+        // Sentinel Security Fix: Parameterize JPQL query to prevent JPQL injection and use upper() for case insensitivity safely
+        java.util.Map<String, Object> params = new java.util.HashMap<>();
+        params.put("q", "%" + getSelectText().toUpperCase() + "%");
+        selectedItems = getFacade().findByJpql("select c from Admission c where c.retired=false and upper(c.name) like :q order by c.name", params);
         return selectedItems;
     }
 
