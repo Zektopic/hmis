@@ -247,6 +247,9 @@ public class ChannelStaffPaymentBillController implements Serializable {
         List<Staff> suggestions = new ArrayList<>();
         String sql;
         Map m = new HashMap();
+        // Security fix: parameterize JPQL query to prevent injection
+        String q = "%" + query.toUpperCase() + "%";
+        m.put("q", q);
 
         if (getSpeciality() != null) {
             if (getSessionController().getApplicationPreference().isShowOnlyMarkedDoctors()) {
@@ -254,7 +257,7 @@ public class ChannelStaffPaymentBillController implements Serializable {
                 sql = " select pi.staff from PersonInstitution pi where pi.retired=false "
                         + " and pi.type=:typ "
                         + " and pi.institution=:ins "
-                        + " and ((pi.staff.person.name) like '%" + query.toUpperCase() + "%'or  (pi.staff.code) like '%" + query.toUpperCase() + "%' )"
+                        + " and (upper(pi.staff.person.name) like :q or upper(pi.staff.code) like :q )"
                         + " and pi.staff.speciality=:spe "
                         + " order by pi.staff.person.name ";
 
@@ -262,10 +265,10 @@ public class ChannelStaffPaymentBillController implements Serializable {
                 m.put("spe", getSpeciality());
                 m.put("typ", PersonInstitutionType.Channelling);
             } else {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q ) and p.speciality.id = " + getSpeciality().getId() + " order by p.person.name";
             }
         } else {
-            sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
+            sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :q or upper(p.code) like :q ) order by p.person.name";
         }
         suggestions = getStaffFacade().findByJpql(sql, m);
 
