@@ -1927,9 +1927,11 @@ public class StoreBillSearch implements Serializable {
                     sql = "SELECT b FROM BilledBill b WHERE b.retired=false and b.id in(Select bt.bill.id From BillItem bt Where bt.referenceBill.billType!=:btp and bt.referenceBill.billType!=:btp2) and b.billType=:type and b.createdAt between :fromDate and :toDate order by b.id";
 
                 } else {
+                    // Sentinel: Fixed JPQL Injection by parameterizing search input
                     sql = "select b from BilledBill b where b.retired=false and"
                             + " b.id in(Select bt.bill.id From BillItem bt Where bt.referenceBill.billType!=:btp and bt.referenceBill.billType!=:btp2) "
-                            + "and b.billType=:type and b.createdAt between :fromDate and :toDate and ((b.staff.person.name) like '%" + txtSearch.toUpperCase() + "%'  or (b.staff.person.phone) like '%" + txtSearch.toUpperCase() + "%'  or (b.insId) like '%" + txtSearch.toUpperCase() + "%') order by b.id desc  ";
+                            + "and b.billType=:type and b.createdAt between :fromDate and :toDate and (upper(b.staff.person.name) like :q  or upper(b.staff.person.phone) like :q  or upper(b.insId) like :q) order by b.id desc  ";
+                    temMap.put("q", "%" + txtSearch.toUpperCase() + "%");
                 }
 
                 temMap.put("toDate", getToDate());
