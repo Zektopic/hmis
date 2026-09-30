@@ -1776,9 +1776,12 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         if (query == null || query.trim().equals("")) {
             suggestions = new ArrayList<>();
         } else {
-            sql = "select p from PatientEncounter p where c.patient.retired=false and (c.patient.bhtNo) like '%" + query.toUpperCase() + "%'";
+            // Sentinel: Fixed JPQL injection by using parameterized queries and correcting the query alias.
+            sql = "select p from PatientEncounter p where p.patient.retired=false and upper(p.patient.bhtNo) like :q";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
             ////// // System.out.println(sql);
-            suggestions = patientEncounterFacade.findByJpql(sql, 20);
+            suggestions = patientEncounterFacade.findByJpql(sql, m, 20);
         }
         if (suggestions == null) {
             suggestions = new ArrayList<>();
