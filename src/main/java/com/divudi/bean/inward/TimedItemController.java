@@ -85,9 +85,12 @@ public class TimedItemController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<TimedItem>();
         } else {
-            sql = "select c from TimedItem c where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
+            // Sentinel: Prevent JPQL injection by parameterizing the query and safely applying uppercase
+            sql = "select c from TimedItem c where c.retired=false and upper(c.name) like :q order by c.name";
             //////System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, m);
         }
         return suggestions;
     }
