@@ -85,9 +85,11 @@ public class TimedItemController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<TimedItem>();
         } else {
-            sql = "select c from TimedItem c where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' order by c.name";
-            //////System.out.println(sql);
-            suggestions = getFacade().findByJpql(sql);
+            // SECURITY FIX: Replaced string concatenation with parameterized query and upper() function to prevent JPQL injection while maintaining case-insensitive logic
+            sql = "select c from TimedItem c where c.retired=false and upper(c.name) like :q order by c.name";
+            Map<String, Object> params = new HashMap<>();
+            params.put("q", "%" + query.toUpperCase() + "%");
+            suggestions = getFacade().findByJpql(sql, params);
         }
         return suggestions;
     }
@@ -119,19 +121,23 @@ public class TimedItemController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<TimedItem>();
         } else {
+            // SECURITY FIX: Replaced string concatenation with parameterized query and upper() function to prevent JPQL injection while maintaining case-insensitive logic
             if (departmentType == null) {
                 sql = "select c from TimedItem c "
-                        + " where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' "
+                        + " where c.retired=false and upper(c.name) like :q "
                         + " order by c.name";
-                suggestions = getFacade().findByJpql(sql);
+                Map<String, Object> params = new HashMap<>();
+                params.put("q", "%" + query.toUpperCase() + "%");
+                suggestions = getFacade().findByJpql(sql, params);
             } else {
                 sql = "select c from TimedItem c "
-                        + " where c.retired=false and (c.name) like '%" + query.toUpperCase() + "%' "
+                        + " where c.retired=false and upper(c.name) like :q "
                         + " and c.departmentType=:dt "
                         + " order by c.name";
-                Map m = new HashMap();
-                m.put("dt", departmentType);
-                suggestions = getFacade().findByJpql(sql, m);
+                Map<String, Object> params = new HashMap<>();
+                params.put("q", "%" + query.toUpperCase() + "%");
+                params.put("dt", departmentType);
+                suggestions = getFacade().findByJpql(sql, params);
             }
         }
         return suggestions;
