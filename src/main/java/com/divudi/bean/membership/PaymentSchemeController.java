@@ -214,11 +214,14 @@ public class PaymentSchemeController implements Serializable {
     }
 
     public List<PaymentScheme> getSelectedItems() {
+        // Sentinel Fix: Parameterized JPQL to prevent SQL injection and properly mimic case-insensitive search
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
         selectedItems = getFacade().findByJpql("select c from PaymentScheme c"
                 + " where c.retired=false "
                 + " and c.membershipScheme is null "
-                + " and (c.name) like '%" + getSelectText().toUpperCase() + "%' "
-                + " order by c.name");
+                + " and upper(c.name) like :q "
+                + " order by c.name", m);
         return selectedItems;
     }
 
