@@ -214,11 +214,15 @@ public class PaymentSchemeController implements Serializable {
     }
 
     public List<PaymentScheme> getSelectedItems() {
-        selectedItems = getFacade().findByJpql("select c from PaymentScheme c"
+        // SECURITY FIX: Parameterize the JPQL query to prevent SQL/JPQL injection
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("q", "%" + getSelectText().toUpperCase() + "%");
+        String sql = "select c from PaymentScheme c"
                 + " where c.retired=false "
                 + " and c.membershipScheme is null "
-                + " and (c.name) like '%" + getSelectText().toUpperCase() + "%' "
-                + " order by c.name");
+                + " and upper(c.name) like :q "
+                + " order by c.name";
+        selectedItems = getFacade().findByJpql(sql, m);
         return selectedItems;
     }
 
