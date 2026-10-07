@@ -1271,12 +1271,14 @@ public class InwardStaffPaymentBillController implements Serializable {
         if (query == null) {
             suggestions = new ArrayList<Staff>();
         } else {
+            // Fix: Parameterized query to prevent JPQL injection
+            m.put("query", "%" + query.toUpperCase() + "%");
             if (getReferringDoctorSpeciality() != null) {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) and p.speciality=:rd order by p.person.name";
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query ) and p.speciality=:rd order by p.person.name";
                 suggestions = staffFacade.findByJpql(sql, m);
             } else {
-                sql = "select p from Staff p where p.retired=false and ((p.person.name) like '%" + query.toUpperCase() + "%'or  (p.code) like '%" + query.toUpperCase() + "%' ) order by p.person.name";
-                suggestions = staffFacade.findByJpql(sql);
+                sql = "select p from Staff p where p.retired=false and (upper(p.person.name) like :query or upper(p.code) like :query ) order by p.person.name";
+                suggestions = staffFacade.findByJpql(sql, m);
             }
         }
         return suggestions;
