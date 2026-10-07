@@ -3570,13 +3570,15 @@ public class BillBeanController implements Serializable {
         List<Bill> lstBills;
         String sql;
         Map temMap = new HashMap();
+        // Sentinel: Prevent JPQL injection by parameterizing user.getId()
         if (searchStr == null || searchStr.trim().equals("")) {
-            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and  b.createdAt between :fromDate and :toDate and b.creater.id = " + user.getId() + " order by b.id desc  ";
+            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and  b.createdAt between :fromDate and :toDate and b.creater.id = :userId order by b.id desc  ";
         } else {
-            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and  b.createdAt between :fromDate and :toDate and  b.creater.id = " + user.getId() + " and (upper(b.patient.person.name) like :q  or upper(b.patient.person.phone) like :q  or upper(b.insId) like :q) order by b.id desc  ";
+            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and  b.createdAt between :fromDate and :toDate and  b.creater.id = :userId and (upper(b.patient.person.name) like :q  or upper(b.patient.person.phone) like :q  or upper(b.insId) like :q) order by b.id desc  ";
             temMap.put("q", "%" + searchStr.toUpperCase() + "%");
         }
 
+        temMap.put("userId", user.getId());
         temMap.put("billType", type);
         temMap.put("toDate", toDate);
         temMap.put("fromDate", fromDate);
@@ -3593,12 +3595,15 @@ public class BillBeanController implements Serializable {
         List<Bill> lstBills;
         String sql;
         Map temMap = new HashMap();
+        // Sentinel: Prevent JPQL injection by parameterizing user.getId() and ins.getId()
         if (searchStr == null || searchStr.trim().equals("")) {
-            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and b.institution.id=" + ins.getId() + " and b.createdAt between :fromDate and :toDate and b.creater.id = " + user.getId() + " order by b.id desc  ";
+            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and b.institution.id=:insId and b.createdAt between :fromDate and :toDate and b.creater.id = :userId order by b.id desc  ";
         } else {
-            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and b.institution.id=" + ins.getId() + " and b.createdAt between :fromDate and :toDate and  b.creater.id = " + user.getId() + " and (upper(b.patient.person.name) like :q  or upper(b.patient.person.phone) like :q  or upper(b.insId) like :q) order by b.id desc  ";
+            sql = "select b from BilledBill b where b.billType = :billType and b.retired=false and b.institution.id=:insId and b.createdAt between :fromDate and :toDate and  b.creater.id = :userId and (upper(b.patient.person.name) like :q  or upper(b.patient.person.phone) like :q  or upper(b.insId) like :q) order by b.id desc  ";
             temMap.put("q", "%" + searchStr.toUpperCase() + "%");
         }
+        temMap.put("userId", user.getId());
+        temMap.put("insId", ins.getId());
         temMap.put("billType", type);
         temMap.put("toDate", toDate);
         temMap.put("fromDate", fromDate);
