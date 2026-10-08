@@ -58,6 +58,7 @@ import com.divudi.core.facade.PaymentFacade;
 import com.divudi.core.facade.PharmaceuticalBillItemFacade;
 import com.divudi.core.facade.WebUserFacade;
 import com.divudi.core.util.JsfUtil;
+import com.divudi.bean.inward.InwardSearch;
 import com.divudi.bean.opd.OpdBillController;
 import com.divudi.bean.pharmacy.BhtIssueReturnController;
 import com.divudi.bean.pharmacy.GrnReturnWithCostingController;
@@ -90,6 +91,7 @@ import com.divudi.core.facade.StaffFacade;
 import com.divudi.core.util.CommonFunctions;
 import com.divudi.core.light.common.BillLight;
 import com.divudi.service.BillService;
+import com.divudi.service.LabSampleLockService;
 import com.divudi.service.PatientDepositService;
 import com.divudi.service.PaymentService;
 import com.divudi.service.ProfessionalPaymentService;
@@ -219,6 +221,8 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
     @EJB
     BillService billService;
     @EJB
+    LabSampleLockService labSampleLockService;
+    @EJB
     ProfessionalPaymentService professionalPaymentService;
     @EJB
     PaymentService paymentService;
@@ -267,6 +271,8 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
     PharmacyBillSearch pharmacyBillSearch;
     @Inject
     PatientDepositController patientDepositController;
+    @Inject
+    InwardSearch inwardSearch;
     @Inject
     OpdBillController opdBillController;
     @Inject
@@ -2011,9 +2017,6 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
     }
 
     // Temporary test method to verify AJAX is working
-    
-
-
     public void testAjaxMethod() {
         // Retained for existing view bindings.
     }
@@ -2036,6 +2039,12 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             return "";
         }
         if (!calculateRefundTotal()) {
+            return "";
+        }
+
+        String labLockMessage = labSampleLockService.checkReturnBlocked(refundingItems, "refund");
+        if (labLockMessage != null) {
+            JsfUtil.addErrorMessage(labLockMessage);
             return "";
         }
 
@@ -2105,6 +2114,31 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             return "";
         }
 
+        List<BillItem> itemsBeingRefunded = new ArrayList<>();
+        for (BillItem refundingItem : refundingBill.getBillItems()) {
+            if (refundingItem.getReferanceBillItem() == null) {
+                continue;
+            }
+            // Refund amounts are entered per fee; the item's net value is only totalled later.
+            boolean refundingThisItem = Math.abs(refundingItem.getNetValue()) > 0.0;
+            if (!refundingThisItem && refundingItem.getBillFees() != null) {
+                for (BillFee refundingFee : refundingItem.getBillFees()) {
+                    if (refundingFee != null && Math.abs(refundingFee.getFeeValue()) > 0.0) {
+                        refundingThisItem = true;
+                        break;
+                    }
+                }
+            }
+            if (refundingThisItem) {
+                itemsBeingRefunded.add(refundingItem.getReferanceBillItem());
+            }
+        }
+        String labLockMessage = labSampleLockService.checkReturnBlocked(itemsBeingRefunded, "refund");
+        if (labLockMessage != null) {
+            JsfUtil.addErrorMessage(labLockMessage);
+            return "";
+        }
+
         if (comment == null || comment.trim().equals("")) {
             JsfUtil.addErrorMessage("Please enter a comment");
             return "";
@@ -2125,14 +2159,11 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
                 }
             }
         }
-        if (!getWebUserController().hasPrivilege("LabBillRefundSpecial")) {
-            if (configOptionApplicationController.getBooleanValueByKey("Immediate Refund Request for OPO Bills of Any Status", true)) {
-                if (sampleHasBeenCollected(refundingBill)) {
-                    JsfUtil.addErrorMessage("One or more bill Item you are refunding has been already undersone process at the Lab. Can not return.");
-                    return "";
-                }
+        if (configOptionApplicationController.getBooleanValueByKey("Immediate Refund Request for OPO Bills of Any Status", true)) {
+            if (sampleHasBeenCollected(refundingBill)) {
+                JsfUtil.addErrorMessage("One or more bill Item you are refunding has been already undersone process at the Lab. Can not return.");
+                return "";
             }
-
         }
 
         if (billFeeIsAlreadyRefunded(refundingBill)) {
@@ -2292,6 +2323,18 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
         // Step 3: Persist the Bill last
         billController.save(rb);
         currentRefundBill = rb;
+
+        // Explicitly persist the refund bill items and their fees. These are built
+        // in-memory by createBillItemsAndBillFeesForOpdRefund() and must not rely on
+        // JPA cascade alone — if the cascaded persist inside billController.save()
+        // above fails for any reason it is silently retried as a merge, which can
+        // leave the bill (and its later payment) saved with no bill items at all.
+        for (BillItem rbi : rb.getBillItems()) {
+            billItemController.save(rbi);
+            for (BillFee rbf : rbi.getBillFees()) {
+                billFeeController.save(rbf);
+            }
+        }
 
         // Update the original bill
         List<Bill> refundBills = new ArrayList<>(bill.getRefundBills());
@@ -2822,6 +2865,11 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             JsfUtil.addErrorMessage("No Saved Original Bill");
             return;
         }
+        String labLockMessage = labSampleLockService.checkCancelBlocked(getBill());
+        if (labLockMessage != null) {
+            JsfUtil.addErrorMessage(labLockMessage);
+            return;
+        }
         if (getBill().getBackwardReferenceBill() == null) {
             JsfUtil.addErrorMessage("No Batch Bill found for the Individual Bill which is selected to Cancel");
             return;
@@ -2874,26 +2922,9 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             }
         }
 
-        if (!configOptionApplicationController.getBooleanValueByKey("Enable the Special Privilege of Canceling OPD Bills", false)) {
-            if (!checkCancelBill(getBill())) {
-                JsfUtil.addErrorMessage("This bill is processed in the laboratory.");
-                if (getWebUserController().hasPrivilege("BillCancel")) {
-                    JsfUtil.addErrorMessage("You have Special privilege to cancel This Bill");
-                } else {
-                    JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
-                    return;
-                }
-            } else {
-                if (!getWebUserController().hasPrivilege("OpdIndividualCancel")) {
-                    JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
-                    return;
-                }
-            }
-        } else {
-            if (!getWebUserController().hasPrivilege("OpdIndividualCancel")) {
-                JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
-                return;
-            }
+        if (!getWebUserController().hasPrivilege("OpdIndividualCancel")) {
+            JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
+            return;
         }
 
         // CRITICAL: Check if batch bill has been settled with credit company
@@ -3018,6 +3049,12 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             ccBillCancellingStarted.set(false);
             return;
         }
+        String labLockMessage = labSampleLockService.checkCancelBlocked(getBill());
+        if (labLockMessage != null) {
+            JsfUtil.addErrorMessage(labLockMessage);
+            ccBillCancellingStarted.set(false);
+            return;
+        }
 
         List<PatientInvestigation> investigations = billService.fetchPatientInvestigations(getBill(), PatientInvestigationStatus.SAMPLE_SENT_TO_OUTLAB);
 
@@ -3027,7 +3064,9 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             return;
         }
 
-        if (!getWebUserController().hasPrivilege("BillCancel")) {
+        // Report and sample-status checks: while the lab sample lock is on they apply to every user;
+        // with the lock off the legacy behaviour applies (skipped only for BillCancel holders).
+        if (labSampleLockService.isLockEnabled() || !getWebUserController().hasPrivilege("BillCancel")) {
 
             // check have PatientReport
             List<PatientReport> pr = patientReportController.allPatientReportsInBill(getBill());
@@ -3088,31 +3127,14 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             }
         }
 
-        if (!configOptionApplicationController.getBooleanValueByKey("Enable the Special Privilege of Canceling CC Bills", false)) {
-            if (!checkCancelBill(getBill())) {
-                JsfUtil.addErrorMessage("This bill is processed in the laboratory.");
-                if (getWebUserController().hasPrivilege("BillCancel")) {
-                    JsfUtil.addErrorMessage("You have Special privilege to cancel This Bill");
-                } else {
-                    JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
-                    ccBillCancellingStarted.set(false);
-                    return;
-                }
-            } else {
-                if (!getWebUserController().hasPrivilege("OpdCancel")) {
-                    JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
-                    ccBillCancellingStarted.set(false);
-                    return;
-                }
-            }
-        } else {
+        if (sessionController.getInstitution().getInstitutionType() != InstitutionType.CollectingCentre && getBill().getInstitution().getInstitutionType() != InstitutionType.CollectingCentre) {
             if (!getWebUserController().hasPrivilege("OpdCancel")) {
                 JsfUtil.addErrorMessage("You have no Privilege to Cancel OPD Bills. Please Contact System Administrator.");
                 ccBillCancellingStarted.set(false);
                 return;
             }
         }
-        
+
         CancelledBill cancellationBill = createCollectingCenterCancelBill(bill);
         billController.save(cancellationBill);
 //        Payment p = getOpdPreSettleController().createPaymentForCancellationsforOPDBill(cancellationBill, paymentMethod);
@@ -3135,7 +3157,7 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
 
         billController.save(getBill());
         JsfUtil.addSuccessMessage("Cancelled");
-        
+
 //        Institution collectingCentre,
 //            double hospitalFee,
 //            double collectingCentreFee,
@@ -3143,7 +3165,6 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
 //            double transactionValue,
 //            HistoryType historyType,
 //            Bill bill
-
         collectingCentreApplicationController.updateCcBalance(
                 getBill().getCollectingCentre(),
                 bill.getTotalHospitalFee(),
@@ -3161,7 +3182,7 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
                 requestController.complteRequest(billRequest);
             }
         }
-        
+
         bill = billFacade.find(bill.getId());
         printPreview = true;
         comment = null;
@@ -3335,6 +3356,12 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             return;
         }
         for (Bill b : billsApproving) {
+
+            String labLockMessage = labSampleLockService.checkCancelBlocked(b.getBilledBill());
+            if (labLockMessage != null) {
+                JsfUtil.addErrorMessage(labLockMessage);
+                continue;
+            }
 
             b.setApproveUser(getSessionController().getCurrent());
             b.setApproveAt(Calendar.getInstance().getTime());
@@ -4446,7 +4473,9 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             JsfUtil.addErrorMessage("No Bill to Dsiplay");
             return "";
         }
-        return "/opd/view/opd_refund_bill_admin?faces-redirect=true";
+        billReturnController.setNewlyReturnedBill(viewingBill);
+
+        return "/opd/bill_return_print?faces-redirect=true";
     }
 
     public String navigateToAdminOpdRefundBill() {
@@ -5144,11 +5173,9 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
                 return pharmacyBillSearch.navigateToViewPharmacyBill();
 
             case PHARMACY_ORDER:
-            case PHARMACY_ORDER_APPROVAL:
-                return purchaseOrderNativeSqlController.viewByBillId(bill.getId());
-
             case PHARMACY_ORDER_PRE:
             case PHARMACY_ORDER_CANCELLED:
+            case PHARMACY_ORDER_APPROVAL:
             case PHARMACY_ORDER_APPROVAL_CANCELLED:
                 pharmacyBillSearch.setBill(bill);
                 return pharmacyBillSearch.navigatePharmacyReprintPo();
@@ -5282,6 +5309,51 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
 
             case DRAWER_ADJUSTMENT:
                 return requestController.navigateToDrawerAdjustmentApproveByBill(bill);
+
+            case INWARD_PAYMENT:
+                inwardSearch.setBill(bill);
+                return "/inward/inward_reprint_bill_payment?faces-redirect=true";
+
+            case INWARD_PAYMENT_CANCELLATION: {
+                // `bill` here is the cancellation bill itself (a CancelledBill).
+                // InwardSearch.createCancelDepositBill() links it back to the
+                // original deposit bill via billedBill, and the original bill's
+                // cancelledBill points forward to this cancellation bill.
+                // The view page (inward_deposit_cancel_bill_payment.xhtml) needs
+                // the ORIGINAL bill loaded with printPreview=true so it can show
+                // inwardSearch.bill.cancelledBill.
+                Bill originalDepositBill = bill.getBilledBill();
+                if (originalDepositBill == null || originalDepositBill.getId() == null) {
+                    JsfUtil.addErrorMessage("Original bill not found for this cancellation");
+                    return "";
+                }
+                Bill reloadedOriginalDepositBill = billService.reloadBill(originalDepositBill.getId());
+                return inwardSearch.navigateToViewInwardDepositCancellationBill(reloadedOriginalDepositBill);
+            }
+
+            case INWARD_PAYMENT_REFUND:
+            case INWARD_PAYMENT_REFUND_CANCELLATION:
+                // No dedicated view/reprint page exists yet for these two atomics.
+                // Both are still InwardPaymentBill-family bills created via
+                // Bill.copy() of the original deposit bill, so patientEncounter
+                // (and therefore the patient/admission details on the receipt)
+                // is preserved. Falling back to the generic Inward payment
+                // reprint page is a reasonable, functioning view.
+                inwardSearch.setBill(bill);
+                return "/inward/inward_reprint_bill_payment?faces-redirect=true";
+
+            case INWARD_APPOINTMENT_BILL:
+            case INWARD_APPOINTMENT_CANCEL_BILL:
+            case INWARD_APPOINTMENT_BILL_REFUND:
+                // Unlike deposit bills, InwardAppointmentBill never populates
+                // patientEncounter (it lives only on Appointment.patientEncounter,
+                // set later at admission time). inward_reprint_bill_payment.xhtml
+                // reads bill.patientEncounter.* directly, so it can't be reused
+                // here. Instead route to a thin DTO-backed view page whose query
+                // (BillFacade.findInwardBillReceiptDTO) resolves the patient via
+                // LEFT JOINs and tolerates the null patientEncounter.
+                inwardSearch.setAppointmentReceiptBillId(bill.getId());
+                return "/inward/inward_view_appointment_bill_receipt?faces-redirect=true";
 
         }
 
@@ -6058,6 +6130,10 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
     public String navigateToViewCcBill(Bill bill) {
         loadBillDetails(bill); // Load the bill details
         return "/collecting_centre/view/cc_bill_view?faces-redirect=true";
+    }
+
+    public String navigateToCcOriginalBillPrint() {
+        return "/collecting_centre/view/cc_original_bill_reprint?faces-redirect=true";
     }
 
     public String navigateToViewCcBillCancellation(Bill bill) {

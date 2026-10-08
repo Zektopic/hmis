@@ -10,7 +10,7 @@
         <h:form>
             <p:panel>
                 <f:facet name="header">
-                    <p:outputLabel value="Finalize Transfer Requests"/>
+                    <p:outputLabel value="Transfer Requests to Approve"/>
                 </f:facet>
                 <div class="row">
                     <div class="col-md-2">
@@ -58,9 +58,14 @@
                                 <h:outputLabel value="#{b.creater.webUserPerson.name}"/>
                                 <br/>
                                 <h:panelGroup rendered="#{b.cancelled}">
-                                    <h:outputLabel style="color: red;" value="Cancelled By "/>
+                                    <h:outputLabel style="color: red;" value="Cancelled By&#160;"/>
                                     <h:outputLabel style="color: red;" rendered="#{b.cancelled}"
                                                    value="#{b.cancelledBill.creater.webUserPerson.name}"/>
+                                    <h:panelGroup rendered="#{not empty b.cancellationReason}">
+                                        <br/>
+                                        <h:outputLabel style="color: red;" value="Reason: "/>
+                                        <h:outputLabel style="color: red;" value="#{b.cancellationReason}"/>
+                                    </h:panelGroup>
                                 </h:panelGroup>
                             </p:column>
                             <p:column headerText="Requested Value" class="text-end">

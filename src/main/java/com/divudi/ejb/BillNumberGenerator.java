@@ -139,6 +139,26 @@ public class BillNumberGenerator {
         return institution.getId() + "-" + "null" + "-" + "null";
     }
 
+    private String getLockKey(Institution institution, BillTypeAtomic billType) {
+        String institutionId = institution != null ? institution.getId().toString() : "null";
+        String billTypeLabel = billType != null ? billType.name() : "null";
+        return institutionId + "-" + billTypeLabel;
+    }
+
+    private String getLockKey(Institution institution, BillTypeAtomic billType, AdmissionType admissionType) {
+        String institutionId = institution != null ? institution.getId().toString() : "null";
+        String billTypeLabel = billType != null ? billType.name() : "null";
+        String admissionTypeId = admissionType != null ? admissionType.getId().toString() : "null";
+        return institutionId + "-" + billTypeLabel + "-" + admissionTypeId;
+    }
+
+    private String getLockKey(Department department, BillTypeAtomic billType, AdmissionType admissionType) {
+        String departmentId = department != null ? department.getId().toString() : "null";
+        String billTypeLabel = billType != null ? billType.name() : "null";
+        String admissionTypeId = admissionType != null ? admissionType.getId().toString() : "null";
+        return departmentId + "-" + billTypeLabel + "-" + admissionTypeId;
+    }
+
     private static final int MAX_SERIAL_DIGITS = 12;
 
     private String formatSerialNumber(Long serialNumber) {
@@ -552,6 +572,364 @@ public class BillNumberGenerator {
         }
 
         return billNumber;
+    }
+
+    private BillNumber fetchLastBillNumberSynchronizedInstitutionYearlyOnly(Institution institution, BillTypeAtomic billTypeAtomic) {
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+
+        String sql = "SELECT b FROM "
+                + " BillNumber b "
+                + " where b.retired=false "
+                + " and b.billTypeAtomic=:bTp "
+                + " and b.institution=:ins "
+                + " AND b.billYear=:yr";
+
+        HashMap<String, Object> hm = new HashMap<>();
+        hm.put("bTp", billTypeAtomic);
+        hm.put("ins", institution);
+        hm.put("yr", currentYear);
+
+        BillNumber billNumber = billNumberFacade.findFreshByJpql(sql, hm);
+
+        if (billNumber == null) {
+            billNumber = new BillNumber();
+            billNumber.setBillTypeAtomic(billTypeAtomic);
+            billNumber.setInstitution(institution);
+            billNumber.setBillYear(currentYear);
+
+            sql = "SELECT count(b) FROM Bill b "
+                    + " where b.billTypeAtomic=:bTp "
+                    + " and b.retired=false"
+                    + " and b.institution=:ins "
+                    + " AND b.billDate BETWEEN :startOfYear AND :endOfYear";
+
+            Calendar startOfYear = Calendar.getInstance();
+            startOfYear.set(Calendar.DAY_OF_YEAR, 1);
+            Calendar endOfYear = Calendar.getInstance();
+            endOfYear.set(Calendar.MONTH, 11);
+            endOfYear.set(Calendar.DAY_OF_MONTH, 31);
+
+            hm = new HashMap<>();
+            hm.put("bTp", billTypeAtomic);
+            hm.put("ins", institution);
+            hm.put("startOfYear", startOfYear.getTime());
+            hm.put("endOfYear", endOfYear.getTime());
+
+            Long dd = billFacade.findAggregateLong(sql, hm, TemporalType.DATE);
+            if (dd == null) {
+                dd = 0L;
+            }
+            billNumber.setLastBillNumber(dd);
+            billNumberFacade.createAndFlush(billNumber);
+        } else {
+            Long newBillNumberLong = billNumber.getLastBillNumber();
+            if (newBillNumberLong == null) {
+                newBillNumberLong = 0L;
+            }
+            billNumber.setLastBillNumber(newBillNumberLong);
+            billNumberFacade.editAndFlush(billNumber);
+        }
+
+        return billNumber;
+    }
+
+    /**
+     * Yearly counter for one institution and bill type, kept per
+     * {@link AdmissionType}. A null {@code admissionType} selects the counter
+     * shared by every admission type of that bill type (issue #23986).
+     */
+    private BillNumber fetchLastBillNumberSynchronizedInstitutionYearlyOnly(Institution institution, BillTypeAtomic billTypeAtomic, AdmissionType admissionType) {
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+
+        String sql = "SELECT b FROM "
+                + " BillNumber b "
+                + " where b.retired=false "
+                + " and b.billTypeAtomic=:bTp "
+                + " and b.institution=:ins "
+                + institutionAdmissionTypeCounterFilter(admissionType)
+                + " AND b.billYear=:yr";
+
+        HashMap<String, Object> hm = new HashMap<>();
+        hm.put("bTp", billTypeAtomic);
+        hm.put("ins", institution);
+        if (admissionType != null) {
+            hm.put("admType", admissionType);
+        }
+        hm.put("yr", currentYear);
+
+        BillNumber billNumber = billNumberFacade.findFreshByJpql(sql, hm);
+
+        if (billNumber == null) {
+            billNumber = new BillNumber();
+            billNumber.setBillTypeAtomic(billTypeAtomic);
+            billNumber.setInstitution(institution);
+            billNumber.setAdmissionType(admissionType);
+            billNumber.setBillYear(currentYear);
+
+            sql = "SELECT count(b) FROM Bill b "
+                    + " where b.billTypeAtomic=:bTp "
+                    + " and b.retired=false"
+                    + " and b.institution=:ins "
+                    + (admissionType != null ? " and b.patientEncounter.admissionType=:admType " : "")
+                    + " AND b.billDate BETWEEN :startOfYear AND :endOfYear";
+
+            Calendar startOfYear = Calendar.getInstance();
+            startOfYear.set(Calendar.DAY_OF_YEAR, 1);
+            Calendar endOfYear = Calendar.getInstance();
+            endOfYear.set(Calendar.MONTH, 11);
+            endOfYear.set(Calendar.DAY_OF_MONTH, 31);
+
+            hm = new HashMap<>();
+            hm.put("bTp", billTypeAtomic);
+            hm.put("ins", institution);
+            if (admissionType != null) {
+                hm.put("admType", admissionType);
+            }
+            hm.put("startOfYear", startOfYear.getTime());
+            hm.put("endOfYear", endOfYear.getTime());
+
+            Long dd = billFacade.findAggregateLong(sql, hm, TemporalType.DATE);
+            if (dd == null) {
+                dd = 0L;
+            }
+            billNumber.setLastBillNumber(dd);
+            billNumberFacade.createAndFlush(billNumber);
+        } else {
+            Long newBillNumberLong = billNumber.getLastBillNumber();
+            if (newBillNumberLong == null) {
+                newBillNumberLong = 0L;
+            }
+            billNumber.setLastBillNumber(newBillNumberLong);
+            billNumberFacade.editAndFlush(billNumber);
+        }
+
+        return billNumber;
+    }
+
+    /**
+     * Yearly counter for one department and bill type, kept per
+     * {@link AdmissionType}. A null {@code admissionType} selects the counter
+     * shared by every admission type of that bill type (issue #23986).
+     */
+    private BillNumber fetchLastBillNumberSynchronized(Department department, BillTypeAtomic billTypeAtomic, AdmissionType admissionType) {
+        int currentYear = Calendar.getInstance().get(Calendar.YEAR);
+
+        String sql = "SELECT b FROM "
+                + " BillNumber b "
+                + " where b.retired=false "
+                + " and b.billTypeAtomic=:bTp "
+                + " and b.department=:dep "
+                + departmentAdmissionTypeCounterFilter(admissionType)
+                + " AND b.billYear=:yr";
+
+        HashMap<String, Object> hm = new HashMap<>();
+        hm.put("bTp", billTypeAtomic);
+        hm.put("dep", department);
+        if (admissionType != null) {
+            hm.put("admType", admissionType);
+        }
+        hm.put("yr", currentYear);
+
+        BillNumber billNumber = billNumberFacade.findFreshByJpql(sql, hm);
+
+        if (billNumber == null) {
+            billNumber = new BillNumber();
+            billNumber.setBillTypeAtomic(billTypeAtomic);
+            billNumber.setDepartment(department);
+            billNumber.setAdmissionType(admissionType);
+            billNumber.setBillYear(currentYear);
+
+            sql = "SELECT count(b) FROM Bill b "
+                    + " where b.billTypeAtomic=:bTp "
+                    + " and b.retired=false"
+                    + " and b.department=:dep "
+                    + (admissionType != null ? " and b.patientEncounter.admissionType=:admType " : "")
+                    + " AND b.billDate BETWEEN :startOfYear AND :endOfYear";
+
+            Calendar startOfYear = Calendar.getInstance();
+            startOfYear.set(Calendar.DAY_OF_YEAR, 1);
+            Calendar endOfYear = Calendar.getInstance();
+            endOfYear.set(Calendar.MONTH, 11);
+            endOfYear.set(Calendar.DAY_OF_MONTH, 31);
+
+            hm = new HashMap<>();
+            hm.put("bTp", billTypeAtomic);
+            hm.put("dep", department);
+            if (admissionType != null) {
+                hm.put("admType", admissionType);
+            }
+            hm.put("startOfYear", startOfYear.getTime());
+            hm.put("endOfYear", endOfYear.getTime());
+
+            Long dd = billFacade.findAggregateLong(sql, hm, TemporalType.DATE);
+            if (dd == null) {
+                dd = 0L;
+            }
+            billNumber.setLastBillNumber(dd);
+            billNumberFacade.createAndFlush(billNumber);
+        } else {
+            Long newBillNumberLong = billNumber.getLastBillNumber();
+            if (newBillNumberLong == null) {
+                newBillNumberLong = 0L;
+            }
+            billNumber.setLastBillNumber(newBillNumberLong);
+            billNumberFacade.editAndFlush(billNumber);
+        }
+
+        return billNumber;
+    }
+
+    // Fetches, increments, and flushes the counter inside the caller's lock, so
+    // concurrent callers cannot read the same lastBillNumber before it is persisted.
+    private Long incrementAndFlushInstitutionYearlyOnly(Institution institution, BillTypeAtomic billType) {
+        BillNumber billNumber = fetchLastBillNumberSynchronizedInstitutionYearlyOnly(institution, billType);
+        Long next = billNumber.getLastBillNumber() + 1;
+        billNumber.setLastBillNumber(next);
+        billNumberFacade.editAndFlush(billNumber);
+        return next;
+    }
+
+    private Long incrementAndFlushInstitutionYearlyOnly(Institution institution, BillTypeAtomic billType, AdmissionType admissionType) {
+        BillNumber billNumber = fetchLastBillNumberSynchronizedInstitutionYearlyOnly(institution, billType, admissionType);
+        Long next = billNumber.getLastBillNumber() + 1;
+        billNumber.setLastBillNumber(next);
+        billNumberFacade.editAndFlush(billNumber);
+        return next;
+    }
+
+    private Long incrementAndFlushDepartmentYearly(Department department, BillTypeAtomic billType, AdmissionType admissionType) {
+        BillNumber billNumber = fetchLastBillNumberSynchronized(department, billType, admissionType);
+        Long next = billNumber.getLastBillNumber() + 1;
+        billNumber.setLastBillNumber(next);
+        billNumberFacade.editAndFlush(billNumber);
+        return next;
+    }
+
+    // Returns the next serial number, with the increment and flush performed inside the lock.
+    public Long fetchNextSerialForYearInstitutionYearlyOnly(Institution institution, BillTypeAtomic billType) {
+        String lockKey = getLockKey(institution, billType);
+        ReentrantLock lock = lockMap.computeIfAbsent(lockKey, k -> new ReentrantLock());
+
+        lock.lock();
+        try {
+            return incrementAndFlushInstitutionYearlyOnly(institution, billType);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public Long fetchNextSerialForYearInstitutionYearlyOnly(Institution institution, BillTypeAtomic billType, AdmissionType admissionType) {
+        String lockKey = getLockKey(institution, billType, admissionType);
+        ReentrantLock lock = lockMap.computeIfAbsent(lockKey, k -> new ReentrantLock());
+
+        lock.lock();
+        try {
+            return incrementAndFlushInstitutionYearlyOnly(institution, billType, admissionType);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    public Long fetchNextSerialForYear(Department department, BillTypeAtomic billType, AdmissionType admissionType) {
+        String lockKey = getLockKey(department, billType, admissionType);
+        ReentrantLock lock = lockMap.computeIfAbsent(lockKey, k -> new ReentrantLock());
+
+        lock.lock();
+        try {
+            return incrementAndFlushDepartmentYearly(department, billType, admissionType);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    // A null admission type selects the counter shared by all admission types.
+    // That branch also skips the department-scoped rows other strategies keep
+    // under the same institution and bill type.
+    private String institutionAdmissionTypeCounterFilter(AdmissionType admissionType) {
+        return admissionType != null
+                ? " and b.admissionType=:admType "
+                : " and b.admissionType is null and b.department is null and b.toDepartment is null ";
+    }
+
+    private String departmentAdmissionTypeCounterFilter(AdmissionType admissionType) {
+        return admissionType != null
+                ? " and b.admissionType=:admType "
+                : " and b.admissionType is null and b.toDepartment is null ";
+    }
+
+    // Highest serial any earlier year's counter reached, or 0 if there is none.
+    private long fetchHighestSerialOfEarlierYears(Institution institution, BillTypeAtomic billTypeAtomic, AdmissionType admissionType) {
+        String jpql = "SELECT max(b.lastBillNumber) FROM BillNumber b "
+                + " where b.retired=false "
+                + " and b.billTypeAtomic=:bTp "
+                + " and b.institution=:ins "
+                + institutionAdmissionTypeCounterFilter(admissionType)
+                + " and b.billYear < :yr";
+        HashMap<String, Object> hm = new HashMap<>();
+        hm.put("bTp", billTypeAtomic);
+        hm.put("ins", institution);
+        if (admissionType != null) {
+            hm.put("admType", admissionType);
+        }
+        hm.put("yr", Calendar.getInstance().get(Calendar.YEAR));
+        return billNumberFacade.findLongByJpql(jpql, hm);
+    }
+
+    private long fetchHighestSerialOfEarlierYears(Department department, BillTypeAtomic billTypeAtomic, AdmissionType admissionType) {
+        String jpql = "SELECT max(b.lastBillNumber) FROM BillNumber b "
+                + " where b.retired=false "
+                + " and b.billTypeAtomic=:bTp "
+                + " and b.department=:dep "
+                + departmentAdmissionTypeCounterFilter(admissionType)
+                + " and b.billYear < :yr";
+        HashMap<String, Object> hm = new HashMap<>();
+        hm.put("bTp", billTypeAtomic);
+        hm.put("dep", department);
+        if (admissionType != null) {
+            hm.put("admType", admissionType);
+        }
+        hm.put("yr", Calendar.getInstance().get(Calendar.YEAR));
+        return billNumberFacade.findLongByJpql(jpql, hm);
+    }
+
+    // Increments past the higher of the counter and floor, so a counter that
+    // must not restart each year carries on from where earlier years ended.
+    private Long incrementAndFlush(BillNumber billNumber, long floor) {
+        long last = billNumber.getLastBillNumber() == null ? 0L : billNumber.getLastBillNumber();
+        Long next = Math.max(last, floor) + 1;
+        billNumber.setLastBillNumber(next);
+        billNumberFacade.editAndFlush(billNumber);
+        return next;
+    }
+
+    // The counters stay yearly; continuousAcrossYears only stops the serial
+    // restarting when the year is left out of the number (issue #23986).
+    private Long fetchNextInwardPaymentSerial(Institution institution, BillTypeAtomic billType, AdmissionType admissionType, boolean continuousAcrossYears) {
+        String lockKey = getLockKey(institution, billType, admissionType);
+        ReentrantLock lock = lockMap.computeIfAbsent(lockKey, k -> new ReentrantLock());
+
+        lock.lock();
+        try {
+            BillNumber billNumber = fetchLastBillNumberSynchronizedInstitutionYearlyOnly(institution, billType, admissionType);
+            long floor = continuousAcrossYears ? fetchHighestSerialOfEarlierYears(institution, billType, admissionType) : 0L;
+            return incrementAndFlush(billNumber, floor);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private Long fetchNextInwardPaymentSerial(Department department, BillTypeAtomic billType, AdmissionType admissionType, boolean continuousAcrossYears) {
+        String lockKey = getLockKey(department, billType, admissionType);
+        ReentrantLock lock = lockMap.computeIfAbsent(lockKey, k -> new ReentrantLock());
+
+        lock.lock();
+        try {
+            BillNumber billNumber = fetchLastBillNumberSynchronized(department, billType, admissionType);
+            long floor = continuousAcrossYears ? fetchHighestSerialOfEarlierYears(department, billType, admissionType) : 0L;
+            return incrementAndFlush(billNumber, floor);
+        } finally {
+            lock.unlock();
+        }
     }
 
     private BillNumber fetchLastBillNumberSynchronized(Institution institution, Department toDepartment, List<BillTypeAtomic> billTypes) {
@@ -2565,7 +2943,184 @@ public class BillNumberGenerator {
         // Return the formatted bill number
         return result.toString();
     }
-    
+
+    public String institutionBillNumberGeneratorYearly(Institution ins, BillTypeAtomic billType) {
+        if (ins == null) {
+            return "";
+        }
+        Long dd = fetchNextSerialForYearInstitutionYearlyOnly(ins, billType);
+
+        String billSuffix = configOptionApplicationController.getLongTextValueByKey("Bill Number Suffix for " + billType, "");
+        if (billSuffix == null || billSuffix.trim().isEmpty()) {
+            billSuffix = "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        if (configOptionApplicationController.getBooleanValueByKey("Add the Institution Code to the Bill Number Generator", true)) {
+            result.append(ins.getInstitutionCode());
+            result.append(getBillNumberDelimiter());
+        }
+        result.append(billSuffix);
+        int year = Calendar.getInstance().get(Calendar.YEAR) % 100;
+        result.append(getBillNumberDelimiter());
+        result.append(String.format("%02d", year));
+        result.append(getBillNumberDelimiter());
+        result.append(formatSerialNumber(dd));
+        return result.toString();
+    }
+
+    public String institutionBillNumberGeneratorYearly(Institution ins, BillTypeAtomic billType, AdmissionType admissionType) {
+        if (ins == null) {
+            return "";
+        }
+        Long dd = fetchNextSerialForYearInstitutionYearlyOnly(ins, billType, admissionType);
+
+        String billSuffix = configOptionApplicationController.getLongTextValueByKey("Bill Number Suffix for " + billType, "");
+        if (billSuffix == null || billSuffix.trim().isEmpty()) {
+            billSuffix = "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        if (configOptionApplicationController.getBooleanValueByKey("Add the Institution Code to the Bill Number Generator", true)) {
+            result.append(ins.getInstitutionCode());
+            result.append(getBillNumberDelimiter());
+        }
+        result.append(billSuffix);
+        result.append(getBillNumberDelimiter());
+        result.append(admissionType.getCode());
+        int year = Calendar.getInstance().get(Calendar.YEAR) % 100;
+        result.append(getBillNumberDelimiter());
+        result.append(String.format("%02d", year));
+        result.append(getBillNumberDelimiter());
+        result.append(formatSerialNumber(dd));
+        return result.toString();
+    }
+
+    public String departmentBillNumberGeneratorYearly(Department dep, BillTypeAtomic billType, AdmissionType admissionType) {
+        if (dep == null || dep.getInstitution() == null) {
+            return "";
+        }
+        Long dd = fetchNextSerialForYear(dep, billType, admissionType);
+
+        String billSuffix = configOptionApplicationController.getLongTextValueByKey("Bill Number Suffix for " + billType, "");
+        if (billSuffix == null || billSuffix.trim().isEmpty()) {
+            billSuffix = "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        if (configOptionApplicationController.getBooleanValueByKey("Add the Institution Code to the Bill Number Generator", true)) {
+            result.append(dep.getInstitution().getInstitutionCode());
+        }
+        result.append(dep.getDepartmentCode());
+        result.append(getBillNumberDelimiter());
+        result.append(billSuffix);
+        result.append(getBillNumberDelimiter());
+        result.append(admissionType.getCode());
+        int year = Calendar.getInstance().get(Calendar.YEAR) % 100;
+        result.append(getBillNumberDelimiter());
+        result.append(String.format("%02d", year));
+        result.append(getBillNumberDelimiter());
+        result.append(formatSerialNumber(dd));
+        return result.toString();
+    }
+
+    /**
+     * Department-level number for inward deposits, payments and post-final
+     * payments, and for their cancellations and refunds (issue #23986).
+     *
+     * <p>With "Inward Payment Bill Numbers - Omit Year" and "Inward Payment
+     * Bill Numbers - Omit Admission Type Code" both off, this returns exactly
+     * what {@link #departmentBillNumberGeneratorYearly(Department, BillTypeAtomic)}
+     * returns, or, when "Unique Serial Per Admission Type for Inward Payments"
+     * is on,
+     * {@link #departmentBillNumberGeneratorYearly(Department, BillTypeAtomic, AdmissionType)}.
+     * Otherwise the number is
+     * {@code [institution code]<department code>/<suffix>[/<admission type code>][/<yy>]/<serial>},
+     * counted per department and bill type, and also per admission type when
+     * its code is kept. Without the year the serial never restarts, so no
+     * number is issued twice.</p>
+     */
+    public String departmentInwardPaymentBillNumberGenerator(Department dep, BillTypeAtomic billType, AdmissionType admissionType) {
+        if (dep == null || dep.getInstitution() == null) {
+            return "";
+        }
+        boolean perAdmissionType = isUniqueSerialPerAdmissionTypeForInwardPayments(admissionType);
+        boolean omitYear = configOptionApplicationController.getBooleanValueByKey("Inward Payment Bill Numbers - Omit Year", false);
+        boolean omitAdmissionTypeCode = configOptionApplicationController.getBooleanValueByKey("Inward Payment Bill Numbers - Omit Admission Type Code", false);
+        if (!omitYear && !perAdmissionType) {
+            return departmentBillNumberGeneratorYearly(dep, billType);
+        }
+        if (!omitYear && !omitAdmissionTypeCode) {
+            return departmentBillNumberGeneratorYearly(dep, billType, admissionType);
+        }
+        AdmissionType serialAdmissionType = perAdmissionType && !omitAdmissionTypeCode ? admissionType : null;
+        Long serial = fetchNextInwardPaymentSerial(dep, billType, serialAdmissionType, omitYear);
+
+        StringBuilder result = new StringBuilder();
+        if (configOptionApplicationController.getBooleanValueByKey("Add the Institution Code to the Bill Number Generator", true)) {
+            result.append(dep.getInstitution().getInstitutionCode());
+        }
+        result.append(dep.getDepartmentCode());
+        result.append(getBillNumberDelimiter());
+        result.append(inwardPaymentBillNumberTail(billType, serialAdmissionType, omitYear, serial));
+        return result.toString();
+    }
+
+    /**
+     * Institution-level counterpart of
+     * {@link #departmentInwardPaymentBillNumberGenerator(Department, BillTypeAtomic, AdmissionType)}:
+     * {@code [institution code/]<suffix>[/<admission type code>][/<yy>]/<serial>}.
+     */
+    public String institutionInwardPaymentBillNumberGenerator(Institution ins, BillTypeAtomic billType, AdmissionType admissionType) {
+        if (ins == null) {
+            return "";
+        }
+        boolean perAdmissionType = isUniqueSerialPerAdmissionTypeForInwardPayments(admissionType);
+        boolean omitYear = configOptionApplicationController.getBooleanValueByKey("Inward Payment Bill Numbers - Omit Year", false);
+        boolean omitAdmissionTypeCode = configOptionApplicationController.getBooleanValueByKey("Inward Payment Bill Numbers - Omit Admission Type Code", false);
+        if (!omitYear && !perAdmissionType) {
+            return institutionBillNumberGeneratorYearly(ins, billType);
+        }
+        if (!omitYear && !omitAdmissionTypeCode) {
+            return institutionBillNumberGeneratorYearly(ins, billType, admissionType);
+        }
+        AdmissionType serialAdmissionType = perAdmissionType && !omitAdmissionTypeCode ? admissionType : null;
+        Long serial = fetchNextInwardPaymentSerial(ins, billType, serialAdmissionType, omitYear);
+
+        StringBuilder result = new StringBuilder();
+        if (configOptionApplicationController.getBooleanValueByKey("Add the Institution Code to the Bill Number Generator", true)) {
+            result.append(ins.getInstitutionCode());
+            result.append(getBillNumberDelimiter());
+        }
+        result.append(inwardPaymentBillNumberTail(billType, serialAdmissionType, omitYear, serial));
+        return result.toString();
+    }
+
+    private boolean isUniqueSerialPerAdmissionTypeForInwardPayments(AdmissionType admissionType) {
+        return admissionType != null
+                && configOptionApplicationController.getBooleanValueByKey(
+                        "Bill Number Generation Strategy - Unique Serial Per Admission Type for Inward Payments", false);
+    }
+
+    // "<suffix>[/<admission type code>][/<yy>]/<serial>"
+    private String inwardPaymentBillNumberTail(BillTypeAtomic billType, AdmissionType admissionType, boolean omitYear, Long serial) {
+        String billSuffix = configOptionApplicationController.getLongTextValueByKey("Bill Number Suffix for " + billType, "");
+        if (billSuffix == null || billSuffix.trim().isEmpty()) {
+            billSuffix = "";
+        }
+        String delimiter = getBillNumberDelimiter();
+        StringBuilder tail = new StringBuilder(billSuffix);
+        if (admissionType != null) {
+            tail.append(delimiter).append(admissionType.getCode());
+        }
+        if (!omitYear) {
+            int year = Calendar.getInstance().get(Calendar.YEAR) % 100;
+            tail.append(delimiter).append(String.format("%02d", year));
+        }
+        tail.append(delimiter).append(formatSerialNumber(serial));
+        return tail.toString();
+    }
+
     public String departmentRequestNumberGeneratorYearly(Department dep, RequestType requestType ) {
         if (dep == null) {
             return "";

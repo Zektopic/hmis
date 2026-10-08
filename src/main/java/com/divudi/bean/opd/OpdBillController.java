@@ -2150,9 +2150,6 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
             if (getPatient().getPhn() == null || getPatient().getPhn().trim().equals("")) {
                 getPatient().setPhn(applicationController.createNewPersonalHealthNumber(getSessionController().getInstitution()));
             }
-            
-            getPatient().getPerson().setForeigner(true);
-            
 
             getPatient().setCreatedInstitution(getSessionController().getInstitution());
             getPatient().setCreater(getSessionController().getLoggedUser());
@@ -2160,13 +2157,15 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
             getPatient().setHasAnAccount(false);
             getPatient().setCreditLimit(0.0);
 
-            // Save Person first (no flush yet)
             if (getPatient().getPerson().getId() != null) {
                 getPersonFacade().edit(getPatient().getPerson());
             } else {
                 getPatient().getPerson().setCreater(getSessionController().getLoggedUser());
                 getPatient().getPerson().setCreatedAt(new Date());
-                getPersonFacade().create(getPatient().getPerson());
+                // Do NOT persist the Person here. Patient.person is cascade = ALL, so the
+                // createAndFlush below saves it in the same transaction. Persisting it here
+                // runs in its own transaction and detaches it, and the cascade then inserts
+                // a second, unreferenced PERSON row (#23887).
             }
 
             // Save Patient with immediate flush (flushes both Person and Patient)
@@ -2310,6 +2309,15 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
         }
     }
 
+    // A multi-bill settle that fails part-way must also retire the bills already completed for earlier
+    // departments/categories; otherwise their persisted items block the retry the error message asks for.
+    private void retireAllPartialBillsOnSettlementFailure(Bill failedBill, List<BillItem> failedBillItems) {
+        for (Bill b : getBills()) {
+            retirePartialBillOnSettlementFailure(b, b.getBillItems());
+        }
+        retirePartialBillOnSettlementFailure(failedBill, failedBillItems);
+    }
+
     private boolean processBillsByDepartment() {
         Set<Department> billDepts = new HashSet<>();
         for (BillEntry e : lstBillEntries) {
@@ -2320,6 +2328,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
             Bill myBill = new BilledBill();
             myBill = saveBill(d, myBill);
             if (myBill == null) {
+                retireAllPartialBillsOnSettlementFailure(null, null);
                 return false;
             }
             List<BillEntry> tmp = new ArrayList<>();
@@ -2328,7 +2337,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                 if (Objects.equals(prformingDept.getId(), d.getId())) {
                     BillItem bi = getBillBean().saveBillItemForOpdBill(myBill, e, getSessionController().getLoggedUser(), getBillFeeBundleEntrys());
                     if (!isPersistedBillItem(bi)) {
-                        retirePartialBillOnSettlementFailure(myBill, myBill.getBillItems());
+                        retireAllPartialBillsOnSettlementFailure(myBill, myBill.getBillItems());
                         JsfUtil.addErrorMessage("Failed to save bill items for department " + d.getName() + ". Please retry the bill settlement.");
                         return false;
                     }
@@ -2337,7 +2346,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                 }
             }
             if (tmp.isEmpty()) {
-                retirePartialBillOnSettlementFailure(myBill, myBill.getBillItems());
+                retireAllPartialBillsOnSettlementFailure(myBill, myBill.getBillItems());
                 JsfUtil.addErrorMessage("No bill items were found for department " + d.getName() + ". Please retry the bill settlement.");
                 return false;
             }
@@ -2379,6 +2388,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                 Bill newlyCreatedIndividualBill = new BilledBill();
                 newlyCreatedIndividualBill = saveBill(d, c, newlyCreatedIndividualBill); // Saving the bill for each Department and Category
                 if (newlyCreatedIndividualBill == null) {
+                    retireAllPartialBillsOnSettlementFailure(null, null);
                     return false;
                 }
                 List<BillEntry> tmp = new ArrayList<>();
@@ -2390,7 +2400,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                             && Objects.equals(billEntry.getBillItem().getItem().getCategory().getId(), c.getId())) {
                         BillItem bi = getBillBean().saveBillItem(newlyCreatedIndividualBill, billEntry, getSessionController().getLoggedUser());
                         if (!isPersistedBillItem(bi)) {
-                            retirePartialBillOnSettlementFailure(newlyCreatedIndividualBill, newlyCreatedIndividualBill.getBillItems());
+                            retireAllPartialBillsOnSettlementFailure(newlyCreatedIndividualBill, newlyCreatedIndividualBill.getBillItems());
                             JsfUtil.addErrorMessage("Failed to save bill items for department " + d.getName() + " and category " + c.getName() + ". Please retry the bill settlement.");
                             return false;
                         }
@@ -2399,7 +2409,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                     }
                 }
                 if (tmp.isEmpty()) {
-                    retirePartialBillOnSettlementFailure(newlyCreatedIndividualBill, newlyCreatedIndividualBill.getBillItems());
+                    retireAllPartialBillsOnSettlementFailure(newlyCreatedIndividualBill, newlyCreatedIndividualBill.getBillItems());
                     JsfUtil.addErrorMessage("No bill items were found for department " + d.getName() + " and category " + c.getName() + ". Please retry the bill settlement.");
                     return false;
                 }
@@ -2477,10 +2487,28 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
         return error;
     }
 
-    public String settleOpdBill() {
+    // synchronized: two overlapping Settle requests from the same session must not both pass the
+    // billSettlingStarted check before either sets it.
+    public synchronized String settleOpdBill() {
         AuditEvent audirEvent = auditEventController.createNewAuditEvent("Settle OPD Bill");
         if (billSettlingStarted) {
             auditEventController.failAuditEvent(audirEvent, "Failed due to already started OPD Bill Settling Process.");
+            return null;
+        }
+        // billSettlingStarted is reset when the first settle finishes, so a second Settle POST
+        // arriving just after it (double-click, Enter pressed twice) would otherwise settle the same,
+        // already-persisted bill items again: they get re-parented onto the new bills, fees are not
+        // recreated, and the patient is charged twice (issue #23968).
+        if (billEntriesAlreadySettled()) {
+            auditEventController.failAuditEvent(audirEvent, "Failed because the bill items were already settled in a previous request.");
+            // The browser renders the response of the last POST, so send the user to the print page
+            // of the bill that was already settled instead of back to an already-used billing screen.
+            if (billEntriesSettledIntoCurrentBatchBill()) {
+                return patientEncounter != null
+                        ? "/inward/inward_service_batch_bill_print?faces-redirect=true"
+                        : "/opd/opd_batch_bill_print?faces-redirect=true";
+            }
+            JsfUtil.addErrorMessage("This bill has already been settled. Please start a new bill.");
             return null;
         }
         billSettlingStarted = true;
@@ -2517,6 +2545,39 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
             billSearch.fetchPatientInvestigationsAllowBypassSampleProcess(getBatchBill());
             return "/opd/opd_batch_bill_print?faces-redirect=true";
         }
+    }
+
+    // Retired items are left over from a failed partial settlement (retirePartialBillOnSettlementFailure),
+    // where the user is asked to retry - those must not be treated as "already settled".
+    private boolean billEntriesAlreadySettled() {
+        for (BillEntry be : getLstBillEntries()) {
+            if (be != null && be.getBillItem() != null && be.getBillItem().getId() != null
+                    && !be.getBillItem().isRetired()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // batchBill may still hold an older bill, so only treat it as "the bill just settled" when the
+    // persisted entries actually belong to it.
+    private boolean billEntriesSettledIntoCurrentBatchBill() {
+        Bill bb = getBatchBill();
+        if (bb == null || bb.getId() == null) {
+            return false;
+        }
+        for (BillEntry be : getLstBillEntries()) {
+            if (be == null || be.getBillItem() == null || be.getBillItem().getId() == null
+                    || be.getBillItem().isRetired()) {
+                continue;
+            }
+            Bill itemBill = be.getBillItem().getBill();
+            if (itemBill == null || itemBill.getBackwardReferenceBill() == null
+                    || !Objects.equals(itemBill.getBackwardReferenceBill().getId(), bb.getId())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean executeSettleBillActions() {
@@ -4223,7 +4284,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                     return "/opd/opd_bill?faces-redirect=true";
                 }
             } else {
-                JsfUtil.addErrorMessage("Start Your Shift First !");
+                JsfUtil.addStartShiftFirstMessageForRedirect();
                 return "/cashier/index?faces-redirect=true";
             }
         } else {
@@ -4266,7 +4327,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                     return "/inward/inward_service_bill?faces-redirect=true";
                 }
             } else {
-                JsfUtil.addErrorMessage("Start Your Shift First !");
+                JsfUtil.addStartShiftFirstMessageForRedirect();
                 return "/cashier/index?faces-redirect=true";
             }
         } else {
@@ -4297,7 +4358,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                 collectingCentreBillController.setCollectingCentre(null);
                 return "/opd/opd_bill_ac?faces-redirect=true";
             } else {
-                JsfUtil.addErrorMessage("Start Your Shift First !");
+                JsfUtil.addStartShiftFirstMessageForRedirect();
                 return "/cashier/index?faces-redirect=true";
             }
         } else {
@@ -4379,7 +4440,7 @@ public class OpdBillController implements Serializable, ControllerWithPatient, C
                     return "/opd/opd_bill?faces-redirect=true";
                 }
             } else {
-                JsfUtil.addErrorMessage("Start Your Shift First !");
+                JsfUtil.addStartShiftFirstMessageForRedirect();
                 return "/cashier/index?faces-redirect=true";
             }
         } else {

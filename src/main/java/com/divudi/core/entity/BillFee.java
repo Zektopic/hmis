@@ -5,6 +5,7 @@
 package com.divudi.core.entity;
 
 import com.divudi.core.data.FeeType;
+import com.divudi.core.data.inward.InwardChargeType;
 import com.divudi.core.entity.inward.InpatientPackageItem;
 import com.divudi.core.entity.inward.PatientRoom;
 import java.io.Serializable;
@@ -12,6 +13,8 @@ import java.util.Date;
 import java.util.Objects;
 import java.util.UUID;
 import javax.persistence.Entity;
+import javax.persistence.EnumType;
+import javax.persistence.Enumerated;
 import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
@@ -66,6 +69,8 @@ public class BillFee implements Serializable, RetirableEntity {
     Department department;
     @ManyToOne
     Speciality speciality;
+    @Enumerated(EnumType.STRING)
+    private InwardChargeType professionalFeeCategory;
     //FeeDate, FeeTime
     @Temporal(javax.persistence.TemporalType.TIMESTAMP)
     Date FeeAt;
@@ -95,6 +100,12 @@ public class BillFee implements Serializable, RetirableEntity {
     private Double feeGrossValueTransient;
     @Transient
     private boolean userChangedTheGrossValueTransient;
+
+    // Amount the cashier is choosing to pay for this fee right now, editable in
+    // professional-payment settlement screens to support partial payment (#22821).
+    // Defaults to the full outstanding balance (feeValue - paidValue).
+    @Transient
+    private Double payingAmount;
 
     double feeMargin;
     double feeAdjusted;
@@ -135,7 +146,6 @@ public class BillFee implements Serializable, RetirableEntity {
     int orderNo;
 
     private Double overriddenRate;
-    private boolean fromPackage;
     @ManyToOne
     private InpatientPackageItem sourcePackageItem;
 
@@ -195,14 +205,6 @@ public class BillFee implements Serializable, RetirableEntity {
         this.overriddenRate = overriddenRate;
     }
 
-    public boolean isFromPackage() {
-        return fromPackage;
-    }
-
-    public void setFromPackage(boolean fromPackage) {
-        this.fromPackage = fromPackage;
-    }
-
     public InpatientPackageItem getSourcePackageItem() {
         return sourcePackageItem;
     }
@@ -245,8 +247,8 @@ public class BillFee implements Serializable, RetirableEntity {
         feeUnitMargin = billFee.getFeeUnitMargin();
         feeUnitDiscount = billFee.getFeeUnitDiscount();
         overriddenRate = billFee.getOverriddenRate();
-        fromPackage = billFee.isFromPackage();
         sourcePackageItem = billFee.getSourcePackageItem();
+        professionalFeeCategory = billFee.getProfessionalFeeCategory();
     }
 
     public void copyWithoutFinancialData(BillFee billFee) {
@@ -259,8 +261,8 @@ public class BillFee implements Serializable, RetirableEntity {
         department = billFee.getDepartment();
         speciality = billFee.getSpeciality();
         FeeAt = billFee.getFeeAt();
-        fromPackage = billFee.isFromPackage();
         sourcePackageItem = billFee.getSourcePackageItem();
+        professionalFeeCategory = billFee.getProfessionalFeeCategory();
     }
 
     public double getFeeVatPlusValue() {
@@ -708,6 +710,14 @@ public class BillFee implements Serializable, RetirableEntity {
         this.speciality = speciality;
     }
 
+    public InwardChargeType getProfessionalFeeCategory() {
+        return professionalFeeCategory;
+    }
+
+    public void setProfessionalFeeCategory(InwardChargeType professionalFeeCategory) {
+        this.professionalFeeCategory = professionalFeeCategory;
+    }
+
     public double getPaidValue() {
         return paidValue;
     }
@@ -919,6 +929,14 @@ public class BillFee implements Serializable, RetirableEntity {
 
     public void setUserChangedTheGrossValueTransient(boolean userChangedTheGrossValueTransient) {
         this.userChangedTheGrossValueTransient = userChangedTheGrossValueTransient;
+    }
+
+    public Double getPayingAmount() {
+        return payingAmount;
+    }
+
+    public void setPayingAmount(Double payingAmount) {
+        this.payingAmount = payingAmount;
     }
 
     public boolean isFeeCollectedByDoctor() {

@@ -1073,8 +1073,13 @@ public class PharmacyRequestForBhtController implements Serializable {
         // From: ward (patient's current room department)
         Department fromDept = getPatientEncounter().getCurrentPatientRoom().getRoomFacilityCharge().getDepartment();
 
-        getPreBill().setDepartment(sessionController.getDepartment());
-        getPreBill().setInstitution(sessionController.getInstitution());
+        if (fromDept == null || fromDept.getInstitution() == null) {
+            JsfUtil.addErrorMessage("Please set the department and institution for the patient's current room.");
+            return false;
+        }
+
+        getPreBill().setDepartment(fromDept);
+        getPreBill().setInstitution(fromDept.getInstitution());
 
         getPreBill().setFromDepartment(fromDept);
         getPreBill().setFromInstitution(fromDept.getInstitution());
@@ -1085,7 +1090,7 @@ public class PharmacyRequestForBhtController implements Serializable {
         getPreBill().setBillTypeAtomic(bta);
         getPreBill().setBillType(bt);
         getPreBill().setComments(comment);
-        String deptId = getBillNumberBean().departmentBillNumberGeneratorYearly(sessionController.getDepartment(), bta);
+        String deptId = getBillNumberBean().departmentBillNumberGeneratorYearly(fromDept, bta);
         getPreBill().setDeptId(deptId);
         getPreBill().setInsId(deptId);
         if (getPreBill().getId() == null) {
@@ -1404,53 +1409,6 @@ public class PharmacyRequestForBhtController implements Serializable {
         return false;
     }
 
-    private Double resolvePackageOverrideRate(com.divudi.core.entity.Item item, double requestedQty) {
-        if (patientEncounter == null || patientEncounter.getInpatientPackage() == null || item == null) {
-            return null;
-        }
-        java.util.Map<String, Object> m = new java.util.HashMap<>();
-        m.put("pkg", patientEncounter.getInpatientPackage());
-        m.put("item", item);
-        m.put("type", com.divudi.core.data.inward.InpatientPackageComponentType.PHARMACY_ITEM);
-        java.util.List<com.divudi.core.entity.inward.InpatientPackageItem> matches = inpatientPackageItemFacade.findByJpql(
-                "SELECT i FROM InpatientPackageItem i"
-                        + " WHERE i.retired = false"
-                        + " AND i.inpatientPackage = :pkg"
-                        + " AND i.item = :item"
-                        + " AND i.componentType = :type",
-                m);
-        if (matches.isEmpty()) {
-            return null;
-        }
-        com.divudi.core.entity.inward.InpatientPackageItem packageItem = matches.get(0);
-
-        java.util.Map<String, Object> qm = new java.util.HashMap<>();
-        qm.put("pe", patientEncounter);
-        qm.put("item", item);
-        Double alreadyIssued = getBillItemFacade().findDoubleByJpql(
-                "SELECT SUM(bi.qty) FROM BillItem bi"
-                        + " WHERE bi.retired = false"
-                        + " AND bi.fromPackage = true"
-                        + " AND bi.patientEncounter = :pe"
-                        + " AND bi.item = :item",
-                qm);
-        double consumed = alreadyIssued != null ? alreadyIssued : 0.0;
-
-        if (getPreBill() != null && getPreBill().getBillItems() != null) {
-            for (BillItem existing : getPreBill().getBillItems()) {
-                if (existing.getId() == null && existing.isFromPackage() && item.equals(existing.getItem())) {
-                    consumed += existing.getQty() != null ? existing.getQty() : 0.0;
-                }
-            }
-        }
-
-        if (consumed + requestedQty > packageItem.getQty()) {
-            return null; // Beyond allocation — bill remaining/extra qty at live rate.
-        }
-
-        return packageItem.getFixedPrice() / packageItem.getQty();
-    }
-
     public void addBillItem() {
 
         if (billItem == null) {
@@ -1502,8 +1460,6 @@ public class PharmacyRequestForBhtController implements Serializable {
         newBillItem.setInwardChargeType(InwardChargeType.Medicine);
         newBillItem.setBill(getPreBill());
         newBillItem.setInstructions(billItem.getInstructions());
-        // Required so resolvePackageOverrideRate()'s cumulative-quantity JPQL (bi.patientEncounter = :pe)
-        // can find this row on subsequent dispenses of the same package-listed item.
         newBillItem.setPatientEncounter(patientEncounter);
 
         // Handle prescription only if prescription data is available
@@ -1567,13 +1523,6 @@ public class PharmacyRequestForBhtController implements Serializable {
                     return;
                 }
             }
-        }
-
-        Double packageRate = resolvePackageOverrideRate(newBillItem.getItem(), getQty());
-        if (packageRate != null) {
-            newBillItem.setOverriddenRate(packageRate);
-            newBillItem.setRate(packageRate);
-            newBillItem.setFromPackage(true);
         }
 
         newBillItem.setSearialNo(getPreBill().getBillItems().size() + 1);
@@ -1731,6 +1680,9 @@ public class PharmacyRequestForBhtController implements Serializable {
         if (wardDept == null || wardDept.getId() == null || pharmacy == null || pharmacy.getId() == null) {
             return;
         }
+        if (pharmacy.getDepartmentType() != DepartmentType.Pharmacy) {
+            return;
+        }
         String pharmacyId = String.valueOf(pharmacy.getId());
         configOptionApplicationController.saveShortTextOption(lastPharmacyKey(wardDept), pharmacyId);
 
@@ -1767,7 +1719,11 @@ public class PharmacyRequestForBhtController implements Serializable {
             return null;
         }
         String id = configOptionApplicationController.getShortTextValueByKey(lastPharmacyKey(wardDept), "");
-        return findDepartmentById(id);
+        Department d = findDepartmentById(id);
+        if (d == null || d.getDepartmentType() != DepartmentType.Pharmacy) {
+            return null;
+        }
+        return d;
     }
 
     /**
@@ -1785,7 +1741,7 @@ public class PharmacyRequestForBhtController implements Serializable {
 
         // Default first, if any.
         Department defaultPharmacy = getDefaultRequestedPharmacy();
-        if (defaultPharmacy != null) {
+        if (defaultPharmacy != null && defaultPharmacy.getDepartmentType() == DepartmentType.Pharmacy) {
             result.add(defaultPharmacy);
         }
 
@@ -1793,7 +1749,7 @@ public class PharmacyRequestForBhtController implements Serializable {
         if (csv != null && !csv.trim().isEmpty()) {
             for (String token : csv.split(",")) {
                 Department d = findDepartmentById(token.trim());
-                if (d != null && !result.contains(d)) {
+                if (d != null && d.getDepartmentType() == DepartmentType.Pharmacy && !result.contains(d)) {
                     result.add(d);
                 }
                 if (result.size() >= MAX_RECENT_PHARMACIES) {

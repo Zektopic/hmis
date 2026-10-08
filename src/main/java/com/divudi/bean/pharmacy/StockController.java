@@ -408,8 +408,14 @@ public class StockController implements Serializable {
         }
 
         sql.append(") ORDER BY i.itemBatch.item.name, i.itemBatch.dateOfExpire");
+        
+        Integer configuredMaxResult = configOptionApplicationController.getIntegerValueByKey(
+                "Pharmacy Retail Sale - Medicine Autocomplete Max Results", 20);
+        int maxResult = configuredMaxResult == null || configuredMaxResult < 1
+                ? 20
+                : configuredMaxResult;
 
-        List<StockDTO> stockDtos = (List<StockDTO>) getStockFacade().findLightsByJpql(sql.toString(), parameters, TemporalType.TIMESTAMP, 20);
+        List<StockDTO> stockDtos = (List<StockDTO>) getStockFacade().findLightsByJpql(sql.toString(), parameters, TemporalType.TIMESTAMP, maxResult);
 
         // Calculate total stock quantities per item
         addItemStockToStockDtos(stockDtos);
@@ -467,9 +473,6 @@ public class StockController implements Serializable {
 
     public void addItemStockToStockDtos(List<StockDTO> inputStockDtos) {
         if (inputStockDtos == null || inputStockDtos.isEmpty()) {
-            return;
-        }
-        if (inputStockDtos.size() > 20) {
             return;
         }
 
@@ -1208,7 +1211,7 @@ public class StockController implements Serializable {
     /**
      *
      */
-    @FacesConverter(forClass = Stock.class)
+    @FacesConverter(value = "stockConverter", forClass = Stock.class)
     public static class StockConverter implements Converter {
 
         @Override

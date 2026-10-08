@@ -9,6 +9,7 @@ import com.divudi.core.entity.Bill;
 import com.divudi.core.entity.BillItem;
 import com.divudi.core.entity.Institution;
 import com.divudi.core.entity.Payment;
+import com.divudi.core.data.dto.CollectingCentrePaymentBillDTO;
 import com.divudi.core.facade.AgentHistoryFacade;
 import com.divudi.core.facade.BillFacade;
 import com.divudi.core.facade.BillItemFacade;
@@ -92,9 +93,10 @@ public class CollectingCentrePaymentController implements Serializable {
     private double finalEndingBalanseInCC = 0.0;
 
     private double payingBalanceAcodingToCCBalabce = 0.0;
+    private double duePaymentAmount;
     private Bill currentPaymentBill;
 
-    private List<Bill> paymentBills;
+    private List<CollectingCentrePaymentBillDTO> paymentBills;
 
     private String billNumber;
     private String comment;
@@ -108,8 +110,12 @@ public class CollectingCentrePaymentController implements Serializable {
         return "/collecting_centre/collecting_centre_repayment_bill_search?faces-redirect=true";
     }
 
-    public String navigateToViewCCPaymentBill(Bill bill) {
-        setCurrentPaymentBill(bill);
+    public String navigateToViewCCPaymentBill(Long billId) {
+        if (billId == null) {
+            JsfUtil.addErrorMessage("Payment Bill is Missing");
+            return "";
+        }
+        setCurrentPaymentBill(billFacade.find(billId));
         return "/collecting_centre/cc_repayment_bill_reprint?faces-redirect=true";
     }
 
@@ -149,6 +155,7 @@ public class CollectingCentrePaymentController implements Serializable {
         startingBalanseInCC = 0.0;
         finalEndingBalanseInCC = 0.0;
         payingBalanceAcodingToCCBalabce = 0.0;
+        duePaymentAmount = 0.0;
         currentPaymentBill = null;
         billNumber = null;
         paymentBills = null;
@@ -161,15 +168,21 @@ public class CollectingCentrePaymentController implements Serializable {
             return;
         }
 
-        double paymentDone = getAllAgentHistory(currentCollectingCentre, true);
+        findPendingCCBills();
 
-        if (paymentDone > 0.0) {
-            JsfUtil.addErrorMessage("There is a bill that was taken within this range.");
+        if (selectedCCpaymentBills == null || selectedCCpaymentBills.isEmpty()) {
+            JsfUtil.addErrorMessage("There are no unpaid bills for this Collecting Centre within this range.");
             setCurrentCollectingCentre(null);
             return;
         }
 
-        findPendingCCBills();
+        long unpaidBillsBeforeRange = countUnpaidCCBillsBefore(currentCollectingCentre, fromDate);
+        if (unpaidBillsBeforeRange > 0) {
+            JsfUtil.addErrorMessage("There are " + unpaidBillsBeforeRange + " unpaid bill(s) for this Collecting Centre dated before the selected From Date. "
+                    + "Extend the range to include them before settling, otherwise they will be left unpaid.");
+            setCurrentCollectingCentre(null);
+            return;
+        }
 
         allHistorys = getAllAgentHistory(currentCollectingCentre);
 
@@ -182,12 +195,51 @@ public class CollectingCentrePaymentController implements Serializable {
         if (endingHistory != null) {
             finalEndingBalanseInCC = endingHistory.getBalanceAfterTransaction();
         }
-        
+
         periodPaidAmount = getPaidAgentPaymentsDuringThisPeriod(currentCollectingCentre);
 
-        calculaPayingBalanceAcodingToCCBalabce(startingHistory, endingHistory,periodPaidAmount);
+        // Ledger balance-delta is retained only for display/reconciliation (startingBalanseInCC /
+        // finalEndingBalanseInCC) - it must not drive the amount actually charged, since it can
+        // silently include activity that was already settled outside the selected date range.
+        calculaPayingBalanceAcodingToCCBalabce(startingHistory, endingHistory, periodPaidAmount);
 
         calculateTotalOfPaymentReceive();
+        
+        totalCCAmount = totalCCReceiveAmount - totalHospitalAmount;
+        
+        if(totalCCAmount >= 0.0){
+            duePaymentAmount = totalCCAmount;
+        }else{
+            duePaymentAmount = 0.0;
+        }
+    }
+
+    public long countUnpaidCCBillsBefore(Institution collectingCentre, Date beforeDate) {
+        String jpql = "select count(bill.id) "
+                + " from Bill bill "
+                + " where bill.collectingCentre=:cc "
+                + " and bill.createdAt < :beforeDate "
+                + " and bill.paid =:paid"
+                + " and bill.retired=false "
+                + " and bill.billTypeAtomic not in :excludedAtomics ";
+
+        Map<String, Object> m = new HashMap<>();
+        m.put("cc", collectingCentre);
+        m.put("beforeDate", beforeDate);
+        m.put("paid", false);
+        m.put("excludedAtomics", ccSettlementVoucherAtomicTypes());
+
+        return billFacade.findLongByJpql(jpql, m, TemporalType.TIMESTAMP);
+    }
+
+    // CC_AGENT_PAYMENT/CC_AGENT_PAYMENT_CANCELLATION vouchers are created with the same
+    // collectingCentre and default to paid=false, so they must be excluded from the unpaid-bill
+    // queries below - otherwise a settlement voucher blocks or pollutes the next settlement.
+    private List<BillTypeAtomic> ccSettlementVoucherAtomicTypes() {
+        List<BillTypeAtomic> types = new ArrayList<>();
+        types.add(BillTypeAtomic.CC_AGENT_PAYMENT);
+        types.add(BillTypeAtomic.CC_AGENT_PAYMENT_CANCELLATION);
+        return types;
     }
     
     public List<AgentHistory> getAllHistoryFromPaymentBill(Bill ccPaymentBill) {
@@ -216,12 +268,50 @@ public class CollectingCentrePaymentController implements Serializable {
         m.put("ret", false);
         m.put("cc", ccPaymentBill.getCollectingCentre());
         m.put("types", types);
-        m.put("fromDate", ccPaymentBill.getFromDate());
-        m.put("toDate", ccPaymentBill.getToDate());
+
+        Date rangeFromDate = ccPaymentBill.getFromDate();
+        Date rangeToDate = ccPaymentBill.getToDate();
+
+        if (rangeFromDate == null || rangeToDate == null) {
+            // Legacy payment bills created before fromDate/toDate were persisted on the Bill itself.
+            // Fall back to the date span of the bills it actually settled so a BETWEEN NULL AND NULL
+            // does not silently match zero rows and skip clearing paymentDone on cancellation.
+            Date[] derivedRange = deriveDateRangeFromBillItems(ccPaymentBill);
+            rangeFromDate = derivedRange[0];
+            rangeToDate = derivedRange[1];
+        }
+
+        m.put("fromDate", rangeFromDate);
+        m.put("toDate", rangeToDate);
+
+        if (rangeFromDate == null || rangeToDate == null) {
+            return new ArrayList<>();
+        }
 
         List<AgentHistory> listCount = agentHistoryFacade.findByJpql(jpql, m, TemporalType.TIMESTAMP);
 
         return listCount;
+    }
+
+    private Date[] deriveDateRangeFromBillItems(Bill ccPaymentBill) {
+        Date min = null;
+        Date max = null;
+        if (ccPaymentBill.getBillItems() != null) {
+            for (BillItem bi : ccPaymentBill.getBillItems()) {
+                Bill referenced = bi.getReferenceBill();
+                if (referenced == null || referenced.getCreatedAt() == null) {
+                    continue;
+                }
+                Date createdAt = referenced.getCreatedAt();
+                if (min == null || createdAt.before(min)) {
+                    min = createdAt;
+                }
+                if (max == null || createdAt.after(max)) {
+                    max = createdAt;
+                }
+            }
+        }
+        return new Date[]{min, max};
     }
 
     public double calculaPayingBalanceAcodingToCCBalabce(AgentHistory startingHistory, AgentHistory endingHistory, double paidCCAmount) {
@@ -229,7 +319,7 @@ public class CollectingCentrePaymentController implements Serializable {
         if (startingHistory != null && endingHistory != null) {
             payingBalance = endingHistory.getBalanceAfterTransaction() - (startingHistory.getBalanceBeforeTransaction() - paidCCAmount);
         }
-
+        
         if (payingBalance > 0.0) {
             payingBalanceAcodingToCCBalabce = payingBalance;
         } else {
@@ -270,30 +360,35 @@ public class CollectingCentrePaymentController implements Serializable {
 
     }
     
+    // Ledger view of the period: every repayment made in the range, less every repayment
+    // cancellation made in the range. Cancelled repayments are not filtered out here, so a
+    // repayment and its cancellation both inside the range net to zero, and a cancellation in
+    // the range of a repayment made before the range is still deducted.
     public double getPaidAgentPaymentsDuringThisPeriod(Institution collectingCentre) {
-        List<HistoryType> types = new ArrayList<>();
-        types.add(HistoryType.RepaymentToCollectingCentre);
+        double totalRepayments = sumPaidAmountToAgency(collectingCentre, HistoryType.RepaymentToCollectingCentre);
+        double totalRepaymentCancellations = sumPaidAmountToAgency(collectingCentre, HistoryType.RepaymentToCollectingCentreCancel);
+        return totalRepayments - totalRepaymentCancellations;
+    }
 
-        String jpql = "select sum(ah.paidAmountToAgency) "
+    // Cancellation histories store a negative paidAmountToAgency (the cancel bill's values are
+    // inverted), so ABS keeps both sums positive and the caller decides the sign.
+    private double sumPaidAmountToAgency(Institution collectingCentre, HistoryType historyType) {
+        String jpql = "select sum(abs(ah.paidAmountToAgency)) "
                 + " from AgentHistory ah "
                 + " where ah.retired=:ret"
                 + " and ah.agency =:cc "
-                + " and ah.historyType in :types "
+                + " and ah.historyType =:type "
                 + " and ah.bill.createdAt between :fromDate and :toDate "
-                + " and ah.bill.retired = false "
-                + " and ah.bill.cancelled = false "
-                + " order by ah.bill.createdAt asc ";
+                + " and ah.bill.retired = false ";
 
         Map<String, Object> m = new HashMap<>();
         m.put("ret", false);
         m.put("cc", collectingCentre);
-        m.put("types", types);
+        m.put("type", historyType);
         m.put("fromDate", fromDate);
         m.put("toDate", toDate);
 
-        double total = agentHistoryFacade.findDoubleByJpql(jpql, m, TemporalType.TIMESTAMP);
-        
-        return total;
+        return agentHistoryFacade.findDoubleByJpql(jpql, m, TemporalType.TIMESTAMP);
     }
 
     public List<AgentHistory> getAllAgentHistory(Institution collectingCentre) {
@@ -402,13 +497,15 @@ public class CollectingCentrePaymentController implements Serializable {
                 + " where bill.collectingCentre=:cc "
                 + " and bill.createdAt between :fromDate and :toDate "
                 + " and bill.paid =:paid"
-                + " and bill.retired=false ";
+                + " and bill.retired=false "
+                + " and bill.billTypeAtomic not in :excludedAtomics ";
 
         jpql += " order by bill.createdAt asc ";
         temMap.put("cc", currentCollectingCentre);
         temMap.put("fromDate", fromDate);
         temMap.put("paid", false);
         temMap.put("toDate", toDate);
+        temMap.put("excludedAtomics", ccSettlementVoucherAtomicTypes());
 
         selectedCCpaymentBills = billFacade.findLightsByJpql(jpql, temMap, TemporalType.TIMESTAMP);
 
@@ -454,24 +551,30 @@ public class CollectingCentrePaymentController implements Serializable {
     }
 
     public void calculateTotalOfPaymentReceive() {
+        double totalDeposits = sumAgentHistoryTransactionValue(HistoryType.CollectingCentreDeposit);
+        double totalDepositCancellations = sumAgentHistoryTransactionValue(HistoryType.CollectingCentreDepositCancel);
+        totalCCReceiveAmount = totalDeposits - totalDepositCancellations;
+    }
 
-        String jpql;
-        Map<String, Object> temMap = new HashMap<>();
+    // Deposit histories store a positive transactionValue and cancellation histories a negative one,
+    // so ABS keeps both sums positive and the caller decides the sign.
+    private double sumAgentHistoryTransactionValue(HistoryType historyType) {
+        String jpql = "select sum(abs(ah.transactionValue)) "
+                + " from AgentHistory ah "
+                + " where ah.retired=:ret"
+                + " and ah.agency =:cc "
+                + " and ah.historyType =:type "
+                + " and ah.bill.createdAt between :fromDate and :toDate "
+                + " and ah.bill.retired = false ";
 
-        jpql = "SELECT SUM(b.netTotal) "
-                + "FROM Bill b "
-                + "WHERE b.billTypeAtomic = :atomic "
-                + "AND b.fromInstitution = :cc "
-                + "AND b.createdAt BETWEEN :fromDate AND :toDate "
-                + "AND b.cancelled = FALSE "
-                + "AND b.retired = FALSE";
+        Map<String, Object> m = new HashMap<>();
+        m.put("ret", false);
+        m.put("cc", currentCollectingCentre);
+        m.put("type", historyType);
+        m.put("fromDate", fromDate);
+        m.put("toDate", toDate);
 
-        temMap.put("atomic", BillTypeAtomic.CC_PAYMENT_RECEIVED_BILL);
-        temMap.put("cc", currentCollectingCentre);
-        temMap.put("fromDate", fromDate);
-        temMap.put("toDate", toDate);
-
-        totalCCReceiveAmount = billFacade.findDoubleByJpql(jpql, temMap, TemporalType.TIMESTAMP);
+        return agentHistoryFacade.findDoubleByJpql(jpql, m, TemporalType.TIMESTAMP);
     }
 
     public void performCalculations() {
@@ -566,9 +669,9 @@ public class CollectingCentrePaymentController implements Serializable {
         ccAgentPaymentBill.setCollectingCentre(currentCollectingCentre);
 
         ccAgentPaymentBill.setBillTypeAtomic(BillTypeAtomic.CC_AGENT_PAYMENT);
-        ccAgentPaymentBill.setNetTotal(payingBalanceAcodingToCCBalabce);
-        ccAgentPaymentBill.setTotal(payingBalanceAcodingToCCBalabce);
-        ccAgentPaymentBill.setPaidAmount(payingBalanceAcodingToCCBalabce);
+        ccAgentPaymentBill.setNetTotal(duePaymentAmount);
+        ccAgentPaymentBill.setTotal(duePaymentAmount);
+        ccAgentPaymentBill.setPaidAmount(duePaymentAmount);
 
         // Record the CC repayment voucher figures so the voucher can be reprinted later.
         ccAgentPaymentBill.setCcBalanceBeforeTransaction(startingBalanseInCC);
@@ -646,7 +749,16 @@ public class CollectingCentrePaymentController implements Serializable {
         String jpql;
         Map temMap = new HashMap();
 
-        jpql = "select b from Bill b "
+        jpql = "select new com.divudi.core.data.dto.CollectingCentrePaymentBillDTO("
+                + " b.id, b.deptId, b.fromDate, b.toDate, b.createdAt, b.cancelled, cb.createdAt,"
+                + " cwup.name, ccrwup.name, ti.institutionCode, ti.name, b.netTotal) "
+                + " from Bill b "
+                + " left join b.cancelledBill cb "
+                + " left join b.creater c "
+                + " left join c.webUserPerson cwup "
+                + " left join cb.creater ccr "
+                + " left join ccr.webUserPerson ccrwup "
+                + " left join b.toInstitution ti "
                 + " where b.billTypeAtomic =:atomic "
                 + " and b.createdAt between :fromDate and :toDate "
                 + " and b.retired=false ";
@@ -667,7 +779,7 @@ public class CollectingCentrePaymentController implements Serializable {
         temMap.put("toDate", getToDate());
         temMap.put("fromDate", getFromDate());
 
-        paymentBills = billFacade.findByJpql(jpql, temMap, TemporalType.TIMESTAMP);
+        paymentBills = (List<CollectingCentrePaymentBillDTO>) billFacade.findLightsByJpqlWithoutCache(jpql, temMap, TemporalType.TIMESTAMP);
 
     }
 
@@ -776,6 +888,101 @@ public class CollectingCentrePaymentController implements Serializable {
 
     private String defaultIfNullOrEmpty(String value, String defaultValue) {
         return (value == null || value.trim().isEmpty()) ? defaultValue : value;
+    }
+
+    public void exportPaymentBillsToExcel() throws IOException {
+        if (paymentBills == null || paymentBills.isEmpty()) {
+            JsfUtil.addErrorMessage("No Bills to Export");
+            return;
+        }
+
+        FacesContext context = FacesContext.getCurrentInstance();
+        HttpServletResponse response = (HttpServletResponse) context.getExternalContext().getResponse();
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=CC_Payment_Bills.xlsx");
+
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); OutputStream out = response.getOutputStream()) {
+
+            XSSFSheet sheet = workbook.createSheet("CC Payment Bills");
+            int rowIndex = 0;
+
+            XSSFFont boldFont = workbook.createFont();
+            boldFont.setBold(true);
+
+            SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy hh:mm a");
+
+            XSSFCellStyle boldStyle = workbook.createCellStyle();
+            boldStyle.setFont(boldFont);
+
+            XSSFCellStyle amountStyle = workbook.createCellStyle();
+
+            SimpleDateFormat sdfDate = new SimpleDateFormat("dd-MM-yyyy");
+
+            Row headerRow = sheet.createRow(rowIndex++);
+            String[] headers = {"No", "Bill No", "From", "To", "Bill At", "Billed By", "CC Code", "CC Name", "Status", "Cancelled At", "Cancelled By", "Net Total"};
+
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(boldStyle);
+            }
+
+            int no = 1;
+            for (CollectingCentrePaymentBillDTO bill : paymentBills) {
+                Row row = sheet.createRow(rowIndex++);
+
+                row.createCell(0).setCellValue(no++);
+                row.createCell(1).setCellValue(defaultIfNullOrEmpty(bill.getDeptId(), ""));
+
+                Cell fromDateCell = row.createCell(2);
+                if (bill.getFromDate() != null) {
+                    fromDateCell.setCellValue(sdfDate.format(bill.getFromDate()));
+                }
+
+                Cell toDateCell = row.createCell(3);
+                if (bill.getToDate() != null) {
+                    toDateCell.setCellValue(sdfDate.format(bill.getToDate()));
+                }
+
+                Cell billAtCell = row.createCell(4);
+                if (bill.getCreatedAt() != null) {
+                    billAtCell.setCellValue(sdf.format(bill.getCreatedAt()));
+                }
+
+                row.createCell(5).setCellValue(defaultIfNullOrEmpty(bill.getCreatedByName(), ""));
+
+                row.createCell(6).setCellValue(defaultIfNullOrEmpty(bill.getToInstitutionCode(), ""));
+                row.createCell(7).setCellValue(defaultIfNullOrEmpty(bill.getToInstitutionName(), ""));
+
+                boolean cancelled = Boolean.TRUE.equals(bill.getCancelled());
+                row.createCell(8).setCellValue(cancelled ? "Cancelled" : "");
+
+                Cell cancelAtCell = row.createCell(9);
+                Cell cancelByCell = row.createCell(10);
+                if (cancelled) {
+                    if (bill.getCancelledAt() != null) {
+                        cancelAtCell.setCellValue(sdf.format(bill.getCancelledAt()));
+                    }
+                    cancelByCell.setCellValue(defaultIfNullOrEmpty(bill.getCancelledByName(), ""));
+                }
+
+                Cell netTotalCell = row.createCell(11);
+                netTotalCell.setCellValue(bill.getNetTotal() != null ? bill.getNetTotal() : 0.0);
+                netTotalCell.setCellStyle(amountStyle);
+            }
+
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            workbook.write(out);
+            out.flush();
+
+            context.responseComplete();
+
+        } catch (Exception e) {
+        }
     }
 
     public void cancelPaymentBill() {
@@ -1024,11 +1231,11 @@ public class CollectingCentrePaymentController implements Serializable {
         this.currentPaymentBill = currentPaymentBill;
     }
 
-    public List<Bill> getPaymentBills() {
+    public List<CollectingCentrePaymentBillDTO> getPaymentBills() {
         return paymentBills;
     }
 
-    public void setPaymentBills(List<Bill> paymentBills) {
+    public void setPaymentBills(List<CollectingCentrePaymentBillDTO> paymentBills) {
         this.paymentBills = paymentBills;
     }
 
@@ -1064,5 +1271,13 @@ public class CollectingCentrePaymentController implements Serializable {
         this.periodPaidAmount = periodPaidAmount;
     }
 // </editor-fold>
+
+    public double getDuePaymentAmount() {
+        return duePaymentAmount;
+    }
+
+    public void setDuePaymentAmount(double duePaymentAmount) {
+        this.duePaymentAmount = duePaymentAmount;
+    }
 
 }

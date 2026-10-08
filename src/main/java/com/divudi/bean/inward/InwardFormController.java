@@ -57,6 +57,8 @@ public class InwardFormController implements Serializable {
 
     @Inject
     private SessionController sessionController;
+    @Inject
+    private AdmissionController admissionController;
 
     private PatientEncounter patientEncounter;
     private List<PatientFormEntry> formEntries;
@@ -328,6 +330,44 @@ public class InwardFormController implements Serializable {
         }
     }
 
+    /**
+     * Builds an EmailAttachment from a filled form entry's captured field
+     * values, for use by any compose flow that needs to attach this
+     * admission's saved documents (loads the entry's components directly
+     * rather than relying on currentEntry/currentCaptureComponents, so it's
+     * safe to call without disturbing this controller's edit-mode state).
+     */
+    public com.divudi.core.data.EmailAttachment toEmailAttachment(PatientFormEntry entry) {
+        if (entry == null || entry.getId() == null) {
+            return null;
+        }
+        String jpql = "select cc "
+                + " from CaptureComponent cc "
+                + " where cc.patientFormEntry=:pfe "
+                + " and cc.retired=:ret "
+                + " order by cc.designComponent.orderNo";
+        Map<String, Object> m = new HashMap<>();
+        m.put("pfe", entry);
+        m.put("ret", false);
+        List<CaptureComponent> components = captureComponentFacade.findByJpql(jpql, m);
+        if (components == null || components.isEmpty()) {
+            return null;
+        }
+        String formName = entry.getDesignComponent() != null ? entry.getDesignComponent().getName() : "Inpatient Form";
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html><body>");
+        sb.append("<h3>").append(escapeHtml(formName)).append("</h3>");
+        sb.append("<div class=\"row\">");
+        for (CaptureComponent cc : components) {
+            sb.append(resolveViewWrapper(cc));
+        }
+        sb.append("</div></body></html>");
+        return new com.divudi.core.data.EmailAttachment(
+                formName + ".html",
+                "text/html",
+                java.util.Base64.getEncoder().encodeToString(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    }
+
     private String buildFormEmailHtml(String formName) {
         StringBuilder sb = new StringBuilder();
         sb.append("<html><body>");
@@ -506,7 +546,7 @@ public class InwardFormController implements Serializable {
     }
 
     public String navigateBackToAdmissionProfile() {
-        return "/inward/admission_profile?faces-redirect=true";
+        return admissionController.navigateToInpatientDashboard(patientEncounter);
     }
 
     public PatientEncounter getPatientEncounter() {

@@ -7,8 +7,10 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.PostConstruct;
+import javax.annotation.Resource;
 import javax.annotation.security.PermitAll;
 import javax.ejb.EJB;
+import javax.ejb.SessionContext;
 import javax.ejb.Singleton;
 import javax.ejb.Startup;
 import javax.ejb.TransactionAttribute;
@@ -20,12 +22,25 @@ import javax.ejb.TransactionAttributeType;
  * On every deployment/restart, migrationPending starts as true, making the
  * page accessible to anyone. If the stored DATABASE_DDL_VERSION config option
  * is set to "CONFIRMED", migration is automatically marked as not necessary
- * and the banner is suppressed. Otherwise, the banner remains until an admin
- * visits mf.xhtml and marks the migration as complete or not necessary.
+ * and the banner is suppressed. Otherwise, a background check (see
+ * {@link DatabaseMigrationVersionCheckService}) compares the stored version
+ * against the wiki's current DDL version shortly after startup and clears
+ * the banner only when the stored version is a real, parseable version
+ * string that is already at or after the wiki's (see
+ * {@link DatabaseMigrationVersionCheckService#isStoredVersionOlderThanWiki}
+ * — issue #23679: this used to require exact string equality, so a stored
+ * version that was already current but not byte-identical to the wiki's
+ * left the banner pending forever with no real evidence of drift). An
+ * unset/unparseable stored version — e.g. a hospital that has never had its
+ * schema checked against the wiki at all — still correctly leaves the
+ * banner up, same as a confirmed-older version, until an admin visits
+ * mf.xhtml and runs the DDL sync (or otherwise marks the migration complete
+ * or not necessary).
  *
- * The wiki DDL version check has been removed to avoid blocking the deploy
- * thread with an outbound HTTP request at startup. Admins can confirm the
- * migration status manually via the admin interface.
+ * The wiki DDL version check runs asynchronously (never inline in
+ * {@code @PostConstruct}) to avoid blocking the deploy thread with an
+ * outbound HTTP request at startup — see commit c32868a9f5, which removed
+ * an earlier synchronous version of this check for exactly that reason.
  *
  * @author Dr M H B Ariyaratne
  */
@@ -39,6 +54,12 @@ public class DatabaseMigrationService {
 
     @EJB
     private ConfigOptionFacade configOptionFacade;
+
+    @EJB
+    private DatabaseMigrationVersionCheckService databaseMigrationVersionCheckService;
+
+    @Resource
+    private SessionContext sessionContext;
 
     private volatile boolean migrationPending = true;
 
@@ -56,9 +77,25 @@ public class DatabaseMigrationService {
             LOGGER.log(Level.WARNING, "DatabaseMigrationService: Could not read stored DDL version at startup.", e);
         }
         LOGGER.info("DatabaseMigrationService: Migration page is open to all users until marked as complete or not necessary.");
+        try {
+            // Fire-and-forget: runs on a background thread via @Asynchronous.
+            // Pass the container-managed no-interface business proxy (via
+            // SessionContext.getBusinessObject), never raw "this" — the
+            // callback's calls back into this bean must go through the
+            // proxy so singleton concurrency locking applies. Also, the
+            // outbound call itself must go through the injected
+            // databaseMigrationVersionCheckService proxy, not a
+            // self-invocation, or @Asynchronous would be silently ignored
+            // and this would block startup exactly like the code removed
+            // in c32868a9f5.
+            DatabaseMigrationService self = sessionContext.getBusinessObject(DatabaseMigrationService.class);
+            databaseMigrationVersionCheckService.checkAndUpdateMigrationStatus(self);
+        } catch (Exception e) {
+            LOGGER.log(Level.FINE, "DatabaseMigrationService: Could not schedule background DDL version check.", e);
+        }
     }
 
-    private String readStoredDdlVersion() {
+    public String readStoredDdlVersion() {
         try {
             Map<String, Object> params = new HashMap<>();
             params.put("key", CONFIG_KEY_DDL_VERSION);

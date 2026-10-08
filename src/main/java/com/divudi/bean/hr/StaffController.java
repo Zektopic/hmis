@@ -774,10 +774,10 @@ public class StaffController implements Serializable {
         } else {
             sql = "select p from Staff p "
                     + " where p.retired=false "
-                    + " and LENGTH(p.code) > 0 "
                     + " and LENGTH(p.person.name) > 0 "
                     + " and (upper(p.person.name) like :q "
-                    + " or upper(p.code) like :q )"
+                    + " or upper(p.code) like :q "
+                    + " or upper(p.staffCode) like :q )"
                     + " order by p.person.name";
 
             Map<String, Object> hm = new HashMap<>();
@@ -846,10 +846,10 @@ public class StaffController implements Serializable {
             sql = "select p from Staff p "
                     + " where p.retired=false "
                     + " and (p.dateLeft is null or p.dateLeft>:cd)"
-                    + " and LENGTH(p.code) > 0 "
                     + " and LENGTH(p.person.name) > 0 "
                     + " and (upper(p.person.name) like :qLike "
-                    + " or upper(p.code)=:qExact )"
+                    + " or upper(p.code)=:qExact "
+                    + " or upper(p.staffCode)=:qExact )"
                     + " order by p.person.name";
 
             m.put("cd", new Date());
@@ -950,7 +950,8 @@ public class StaffController implements Serializable {
                 + " where p.retired=false "
                 + " and p.roster=:rs "
                 + " and ((p.person.name) like :q "
-                + " or  (p.code) like :q )"
+                + " or  (p.code) like :q "
+                + " or  (p.staffCode) like :q )"
                 + " order by p.person.name";
         //////System.out.println(sql);
         HashMap hm = new HashMap();

@@ -4,9 +4,12 @@
  */
 package com.divudi.core.facade;
 
+import com.divudi.core.data.dto.InwardBillReceiptDTO;
 import com.divudi.core.entity.Bill;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import javax.ejb.Stateless;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
@@ -27,6 +30,100 @@ public class BillFacade extends AbstractFacade<Bill> {
 
     public BillFacade() {
         super(Bill.class);
+    }
+
+    /**
+     * Fetches the print DTO used by the Appointment Deposit Conversion
+     * receipts (Issue #22783, Part A) for a single bill — either the
+     * INWARD_APPOINTMENT_CANCEL_BILL or the INWARD_DEPOSIT bill created by
+     * {@code AdmissionController.convertAppointmentDepositToInwardDeposit()}.
+     *
+     * LEFT JOINs are used throughout because the appointment bill's
+     * {@code patientEncounter} is never populated on the {@code Bill} itself
+     * (only on {@code Appointment.patientEncounter}, set at admission time by
+     * {@code AdmissionController.updateAppointment()}) — so the cloned
+     * INWARD_APPOINTMENT_CANCEL_BILL also has a null {@code patientEncounter}.
+     * An inner (dot-path) navigation there would silently drop that bill from
+     * the result set. {@code referenceBill} is likewise only present on the
+     * cancel bill, not on the deposit bill.
+     *
+     * Patient name is resolved two ways and COALESCEd: via
+     * {@code Bill.patientEncounter.patient} (populated for INWARD_DEPOSIT
+     * bills) and via {@code Bill.patient} directly (the only path populated
+     * on appointment bills, per {@code AppointmentController.saveBill()} —
+     * without this fallback, appointment-bill receipts render "Name: null").
+     * Title/DOB/sex cannot be COALESCEd the same way: EclipseLink fails the DTO
+     * constructor's reflective binding with a ConversionException
+     * ("The object [Mrs] ... could not be converted to ... Title") when an enum-
+     * or Date-typed field is wrapped in COALESCE/CASE across two join paths in
+     * the same SELECT NEW. So they are still read from the encounter path in the
+     * main query, and when the bill has no encounter (title/dob/sex all null) a
+     * second lightweight query backfills them from {@code Bill.patient} directly.
+     * Admission Type and BHT No stay blank on such a receipt — the bill genuinely
+     * has no encounter to source them from. (#23622)
+     *
+     * Bill.netTotal is a primitive double and is projected directly (not
+     * COALESCEd) to avoid EclipseLink DTO-constructor binding mismatches.
+     *
+     * @param billId the Bill id
+     * @return the populated DTO, or null if not found
+     */
+    public InwardBillReceiptDTO findInwardBillReceiptDTO(Long billId) {
+        if (billId == null) {
+            return null;
+        }
+        // billDate is DATE-only (prints 12:00 AM); the receipt's date and time come from createdAt.
+        String jpql = "SELECT NEW com.divudi.core.data.dto.InwardBillReceiptDTO("
+                + "b.id, b.deptId, b.createdAt, b.paymentMethod, b.netTotal, b.comments, "
+                + "rb.deptId, "
+                + "dept.printingName, dept.address, dept.telephone1, dept.telephone2, dept.fax, dept.email, "
+                + "per.title, COALESCE(per.name, per2.name), per.dob, per.sex, "
+                + "at.name, "
+                + "pe.bhtNo, "
+                + "cp.title, cp.name, "
+                + "b.billTypeAtomic, b.cancelled, b.refunded) "
+                + "FROM Bill b "
+                + "LEFT JOIN b.referenceBill rb "
+                + "LEFT JOIN b.department dept "
+                + "LEFT JOIN b.patientEncounter pe "
+                + "LEFT JOIN pe.patient pat "
+                + "LEFT JOIN pat.person per "
+                + "LEFT JOIN b.patient pat2 "
+                + "LEFT JOIN pat2.person per2 "
+                + "LEFT JOIN pe.admissionType at "
+                + "LEFT JOIN b.creater cr "
+                + "LEFT JOIN cr.webUserPerson cp "
+                + "WHERE b.id = :billId";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("billId", billId);
+
+        List<?> results = findLightsByJpql(jpql, params);
+        if (results == null || results.isEmpty()) {
+            return null;
+        }
+        InwardBillReceiptDTO dto = (InwardBillReceiptDTO) results.get(0);
+
+        // The demographics above come from the bill's patient ENCOUNTER. A bill
+        // with no encounter - e.g. the appointment-deposit cancel bill produced by
+        // the Convert-to-Inward-Deposit flow - therefore shows a blank title / age
+        // / sex on its receipt even though the bill's own patient has them.
+        // EclipseLink cannot COALESCE/CASE over an @Enumerated path in a
+        // constructor query (ConversionException), so fall back with a second
+        // lightweight query instead. (#23622)
+        if (dto.getPatientDob() == null && dto.getPatientSex() == null && dto.getPatientTitle() == null) {
+            List<?> fb = findLightsByJpql(
+                    "SELECT p.title, p.dob, p.sex "
+                    + "FROM Bill b JOIN b.patient pt JOIN pt.person p WHERE b.id = :billId",
+                    params);
+            if (fb != null && !fb.isEmpty() && fb.get(0) instanceof Object[]) {
+                Object[] row = (Object[]) fb.get(0);
+                dto.setPatientTitle((com.divudi.core.data.Title) row[0]);
+                dto.setPatientDob((java.util.Date) row[1]);
+                dto.setPatientSex((com.divudi.core.data.Sex) row[2]);
+            }
+        }
+        return dto;
     }
 
     /**

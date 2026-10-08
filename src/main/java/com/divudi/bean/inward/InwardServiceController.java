@@ -251,6 +251,8 @@ public class InwardServiceController implements Serializable {
             return;
         }
 
+        itemController.warnIfItemNameDuplicated(getCurrent());
+
 //        if (errorCheck()) {
 //            return;
 //        }

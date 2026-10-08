@@ -65,6 +65,7 @@ import com.divudi.core.data.AppointmentStatus;
 import com.divudi.core.data.BillType;
 import com.divudi.core.data.BillTypeAtomic;
 import com.divudi.core.data.clinical.ClinicalFindingValueType;
+import com.divudi.core.data.dto.InwardBillReceiptDTO;
 import com.divudi.core.data.dto.PatientEncounterDto;
 import com.divudi.core.entity.Area;
 import com.divudi.core.entity.Department;
@@ -73,6 +74,7 @@ import com.divudi.core.entity.clinical.ClinicalFindingValue;
 import com.divudi.core.entity.inward.AdmissionType;
 import com.divudi.core.entity.PaymentScheme;
 import com.divudi.core.entity.inward.Reservation;
+import com.divudi.core.entity.inward.RoomFacilityCharge;
 import com.divudi.core.facade.ClinicalFindingValueFacade;
 import com.divudi.core.facade.ReservationFacade;
 import com.divudi.core.util.CommonFunctions;
@@ -95,7 +97,6 @@ import javax.faces.convert.FacesConverter;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.persistence.TemporalType;
-import org.primefaces.PrimeFaces;
 import org.primefaces.event.TabChangeEvent;
 
 /**
@@ -162,6 +163,10 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         return inpatientPackageApplicationBean;
     }
 
+    /** Bills the configured automatic admission charges. (Issue #23594) */
+    @Inject
+    private com.divudi.service.inward.AdmissionChargeApplicationBean admissionChargeApplicationBean;
+
     @Inject
     BhtEditController bhtEditController;
     @Inject
@@ -170,6 +175,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
     ClinicalFindingValueController clinicalFindingValueController;
     @Inject
     AppointmentController appointmentController;
+    @Inject
+    AdmissionTypeController admissionTypeController;
     @Inject
     BillSearch billSearch;
     @Inject
@@ -237,6 +244,16 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
     private Reservation currentReservation;
     
     private boolean patientForiegner;
+
+    /**
+     * Drives the {@code dlgActiveAdmission} dialog's server-side {@code visible}
+     * attribute. The "Admit" button is a non-ajax ({@code ajax="false"}) full
+     * postback (see Issue #21175), so {@code PrimeFaces.current().executeScript()}
+     * — which only queues JS into an ajax partial response — never reaches the
+     * browser; binding {@code visible} to this flag instead makes the dialog show
+     * on the resulting full page render. (Issue #23514)
+     */
+    private boolean showActiveAdmissionWarning;
 
     @PostConstruct
     public void init() {
@@ -364,6 +381,13 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         metadata.addConfigOption(new ConfigOptionInfo(
                 "Inward Patient Admit - Credit Companies Require Reference Number",
                 "Require a reference number for credit companies during admission (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Patient NIC Required for Credit Admissions",
+                "Refuse a Credit admission when the patient's National ID Number is blank; any value, even '-', is accepted. Baby and Rapid / Temp A&E admissions are exempt. Independent of 'Patient Details Required in Patient Admission' (default false)",
                 "inward/inward_admission",
                 OptionScope.APPLICATION
         ));
@@ -858,6 +882,10 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         return "/inward/inward_room_change?faces-redirect=true";
     }
 
+    public String navigateToPackageChange() {
+        return "/inward/inward_package_change?faces-redirect=true";
+    }
+
     public String navigateToAddRoom() {
         roomChangeController.createPatientRoom();
         roomChangeController.setInstitution(sessionController.getInstitution());
@@ -900,13 +928,23 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         }
         List<com.divudi.core.entity.inward.PatientRoom> activeRooms = new java.util.ArrayList<>();
         try {
+            // Theatre rooms tied to a specific surgery point at that
+            // surgery's procedure encounter (a child of this admission), not
+            // the admission itself - include children so an active theatre
+            // stay still shows on this panel.
+            List<PatientEncounter> encounters = new java.util.ArrayList<>();
+            encounters.add(current);
+            List<PatientEncounter> children = inwardBean.fetchChildPatientEncounter(current);
+            if (children != null) {
+                encounters.addAll(children);
+            }
             String jpql = "SELECT pr FROM PatientRoom pr "
                     + "WHERE pr.retired = false "
                     + "AND pr.discharged = false "
-                    + "AND pr.patientEncounter = :enc "
+                    + "AND pr.patientEncounter IN :encs "
                     + "ORDER BY pr.createdAt";
             java.util.HashMap<String, Object> params = new java.util.HashMap<>();
-            params.put("enc", current);
+            params.put("encs", encounters);
             activeRooms = patientRoomFacade.findByJpql(jpql, params);
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to load active rooms for admission ID: "
@@ -917,18 +955,38 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
     }
 
     public String navigateToAddBabyAdmission() {
-        if (current == null) {
-            JsfUtil.addErrorMessage("No Admission selected");
+        // The disabled attribute on the "Add Baby Admission" buttons (Admission
+        // Profile, Nursing Workbench) is a UI convenience only and can go stale
+        // (page left open past discharge) or be bypassed (direct action call
+        // with no admission selected). Re-check server-side before creating the
+        // baby admission, since getCurrent() would otherwise happily hand back
+        // a transient, unsaved Admission as the parent. (#22998 review)
+        if (current == null || current.getId() == null || current.getId() <= 0) {
+            JsfUtil.addErrorMessage("Select a saved admission before adding a baby admission.");
             return "";
         }
-        if (current.getParentEncounter() != null) {
+        // AdmissionController is @SessionScoped, so `current` can be a stale
+        // snapshot from earlier in the session (e.g. another tab/request
+        // discharged this same admission since it was loaded here). Re-read
+        // the parent from the DB rather than trusting the in-memory copy.
+        Admission persistedParent = getEjbFacade().findWithoutCache(current.getId());
+        if (persistedParent == null || persistedParent.getPatient() == null
+                || persistedParent.getPatient().getId() == null) {
+            JsfUtil.addErrorMessage("Select a saved admission before adding a baby admission.");
+            return "";
+        }
+        if (Boolean.TRUE.equals(persistedParent.getDischarged())) {
+            JsfUtil.addErrorMessage("A discharged admission cannot have a baby admission.");
+            return "";
+        }
+        if (persistedParent.getParentEncounter() != null) {
             // A baby admission's parentEncounter already points to the mother.
             // Do not allow a baby to have its own baby admission (e.g. grandmother
             // admits mother, mother admits daughter is not a realistic scenario).
             JsfUtil.addErrorMessage("A baby admission cannot have its own baby admission.");
             return "";
         }
-        parentAdmission = current;
+        parentAdmission = persistedParent;
         Admission ad = new Admission();
         if (ad.getDateOfAdmission() == null) {
             ad.setDateOfAdmission(CommonFunctions.getCurrentDateTime());
@@ -1454,6 +1512,39 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    /**
+     * Brings the stored financial snapshot shown on the Inpatient Dashboard up to
+     * date when bills were added since it was last calculated. Call before
+     * navigating to admission_profile.
+     */
+    public void refreshDashboardFinancials() {
+        if (current == null) {
+            return;
+        }
+        PatientEncounter refreshed = bhtSummeryController.refreshProcessingSnapshotIfStale(current);
+        if (refreshed instanceof Admission) {
+            current = (Admission) refreshed;
+        }
+    }
+
+    /**
+     * Opens the Inpatient Dashboard for an encounter selected outside this bean
+     * (bed board, surgery bill). The dashboard renders {@code current}, so it is
+     * set here rather than only on BhtSummeryController.
+     */
+    public String navigateToInpatientDashboard(PatientEncounter pe) {
+        if (pe == null) {
+            pe = current;
+        }
+        if (pe instanceof Admission) {
+            current = (Admission) pe;
+            refreshDashboardFinancials();
+            pe = current;
+        }
+        bhtSummeryController.setPatientEncounter(pe);
+        return bhtSummeryController.navigateToInpatientProfile();
+    }
+
     public String navigateToAdmissionProfilePage() {
         if (current == null) {
             JsfUtil.addErrorMessage("Nothing Selected");
@@ -1464,6 +1555,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             return "";
         }
 
+        refreshDashboardFinancials();
         patientDetailsEditable = false;
         fetchChildAdmissions();
         if (configOptionApplicationController.getBooleanValueByKey("Patient admission and room assignment are simultaneous processes.", true)) {
@@ -1472,8 +1564,23 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             bhtSummeryController.setPatientEncounterHasProvisionalBill(isAddmissionHaveProvisionalBill((Admission) current));
             return bhtSummeryController.navigateToInpatientProfile();
         } else {
-            if (current.isRoomAdmitted() || current.isDischarged() || current.isPaymentFinalized()
-                    || !current.getAdmissionType().isRoomChargesAllowed()) {
+            // A legacy/converted encounter can still have no admission type. Treat that
+            // as "room charges unknown" and send it to the dashboard rather than NPEing
+            // here, which left the button doing nothing at all. (#23577)
+            boolean roomChargesAllowed = current.getAdmissionType() != null
+                    && current.getAdmissionType().isRoomChargesAllowed();
+            // A baby admission never gets a room of its own - the baby stays in the
+            // mother's room (#9900) - so isRoomAdmitted() is false forever and the
+            // room-assignment diversion below would trap it permanently, leaving the
+            // baby's dashboard unreachable from every entry point. (#23577)
+            // PatientEncounter.discharged is a nullable Boolean, not a primitive, so
+            // reading it as isDischarged() unboxes null and throws on a legacy row
+            // where DISCHARGED IS NULL - leaving this button doing nothing, the exact
+            // symptom #23577 set out to remove. Read it the way the rest of the
+            // codebase does (navigateToBabyAdmission above, InwardReportControllerBht,
+            // NursingDischargeController).
+            if (isBabyAdmission() || current.isRoomAdmitted() || Boolean.TRUE.equals(current.getDischarged())
+                    || current.isPaymentFinalized() || !roomChargesAllowed) {
                 current.getPatient().setEditingMode(false);
                 bhtSummeryController.setPatientEncounter(current);
                 bhtSummeryController.setPatientEncounterHasProvisionalBill(isAddmissionHaveProvisionalBill((Admission) current));
@@ -1527,7 +1634,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         HashMap hm = new HashMap();
         sql = "select c from Admission c"
                 + " where ((c.bhtNo) like :q or"
-                + " (c.patient.person.name) like :q ) "
+                + " (c.patient.person.name) like :q or"
+                + " (c.patient.code) like :q ) "
                 + " order by c.bhtNo";
         hm.put("q", "%" + query.toUpperCase() + "%");
         suggestions = getFacade().findByJpql(sql, hm);
@@ -1541,7 +1649,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         HashMap hm = new HashMap();
         sql = "select c from Admission c"
                 + " where ((c.bhtNo) like :q or"
-                + " (c.patient.person.name) like :q ) "
+                + " (c.patient.person.name) like :q or"
+                + " (c.patient.code) like :q ) "
                 + " and c.paymentFinalized=true"
                 + " order by c.bhtNo";
         hm.put("q", "%" + query.toUpperCase() + "%");
@@ -1575,7 +1684,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                     + " ( c.paymentFinalized is null or c.paymentFinalized=false )"
                     + " and ( ((c.bhtNo) like :q )"
                     + " or ((c.patient.person.name) like :q ) "
-                    + " or ((c.patient.phn =:phn ))) order by c.bhtNo";
+                    + " or ((c.patient.phn =:phn )) "
+                    + " or ((c.patient.code) like :q )) order by c.bhtNo";
 
             h.put("q", "%" + query.toUpperCase() + "%");
             h.put("phn", query.toUpperCase());
@@ -1596,6 +1706,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                 + " and ( ((c.bhtNo) like :q ) "
                 + " or ((c.patient.person.name) like :q ) "
                 + " or ((c.patient.phn =:phn )) "
+                + " or ((c.patient.code) like :q ) "
                 + " or ((c.patient.person.phone) like :q ) "
                 + " or ((c.patient.person.mobile) like :q ) ) ";
         HashMap h = new HashMap();
@@ -1709,7 +1820,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                     + " where c.retired=false "
                     + " and c.paymentFinalized=true "
                     + " and ((c.bhtNo) like :q "
-                    + " or (c.patient.person.name) like :q)"
+                    + " or (c.patient.person.name) like :q "
+                    + " or (c.patient.code) like :q)"
                     + "  order by c.bhtNo";
             ////// // System.out.println(sql);
             //      h.put("btp", BillType.InwardPaymentBill);
@@ -1873,6 +1985,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         printPreview = false;
         encounterCreditCompanies = new ArrayList<>();
         encounterCreditCompany = new EncounterCreditCompany();
+        showActiveAdmissionWarning = false;
         bhtNumberCalculation();
     }
 
@@ -1889,6 +2002,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         patient = null;
         yearMonthDay = null;
         printPreview = false;
+        showActiveAdmissionWarning = false;
         bhtNumberCalculation();
         return "/inward/inward_admission";
     }
@@ -2143,6 +2257,21 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             return true;
         }
 
+        // Hard block on duplicate active admissions (Issue #23514). Runs
+        // unconditionally here — not just from the main "Admit" button's
+        // pre-check — so it also covers baby admission and OPD->Inward
+        // conversion (both call saveSelected()/saveConvertSelected() directly,
+        // skipping proceedWithAdmissionCheck()), and so there is no UI path
+        // (including the soft-warning dialog's own "Yes, Proceed" button) that
+        // can override it once the config option is enabled.
+        if (configOptionApplicationController.getBooleanValueByKey(
+                "Inward Admission - Enforce Hard Block on Duplicate Active Admission", false)
+                && isPatientAlreadyAdmitted()) {
+            JsfUtil.addErrorMessage("This patient already has an active (undischarged) admission. "
+                    + "Discharge the existing admission before admitting again.");
+            return true;
+        }
+
         // Rapid / Temp A&E admissions are admitted with incomplete demographics
         // by design; blank name/address are placeholder-filled and the required
         // patient-detail checks below are skipped. (Issue #21183)
@@ -2189,17 +2318,39 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                     return true;
                 }
             }
-            if (configOptionApplicationController.getBooleanValueByKey("Patient NIC is Required in Patient Admission", false)) {
+            // Baby admissions typically have no NIC of their own yet, so this
+            // admission-specific NIC-required check is skipped for them. (Issue #22998)
+            if (!isBabyAdmission() && configOptionApplicationController.getBooleanValueByKey("Patient NIC is Required in Patient Admission", false)) {
                 if (getCurrent().getPatient().getPerson().getNic() == null || getCurrent().getPatient().getPerson().getNic().trim().isEmpty()) {
                     JsfUtil.addErrorMessage("Patient NIC is Required");
                     return true;
                 }
             }
-            if (configOptionApplicationController.getBooleanValueByKey("Patient Phone Number is Required in Patient Admission", false)) {
+            // Baby admissions typically have no phone number of their own yet either
+            // (staff use the "Copy Address & Phone to Baby" button when one is needed),
+            // so this admission-specific phone-required check is skipped for them too,
+            // matching the NIC exemption above. (Issue #23509)
+            if (!isBabyAdmission() && configOptionApplicationController.getBooleanValueByKey("Patient Phone Number is Required in Patient Admission", false)) {
                 if (getCurrent().getPatient().getPerson().getPhone() == null || getCurrent().getPatient().getPerson().getPhone().trim().isEmpty()) {
                     JsfUtil.addErrorMessage("Patient Phone Number is Required");
                     return true;
                 }
+            }
+        }
+
+        // Credit admissions need a patient NIC on record. Deliberately kept outside
+        // the "Patient Details Required" block above, and on its own inward-only
+        // option, so enabling it neither drags in the other patient-detail checks
+        // nor affects OPD/channelling. Any non-blank value (even "-") is accepted.
+        // Baby and Rapid / Temp A&E admissions are exempt, matching the existing
+        // NIC check. (Issue #23978)
+        if (!isRapidTempAe() && !isBabyAdmission()
+                && getCurrent().getPaymentMethod() == PaymentMethod.Credit
+                && configOptionApplicationController.getBooleanValueByKey("Inward Admission - Patient NIC Required for Credit Admissions", false)) {
+            Person person = getCurrent().getPatient().getPerson();
+            if (person == null || person.getNic() == null || person.getNic().trim().isEmpty()) {
+                JsfUtil.addErrorMessage("National ID Number is required for credit admissions. Enter the NIC, or '-' if not available.");
+                return true;
             }
         }
 
@@ -2321,6 +2472,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
 
     @Inject
     private InwardPaymentController inwardPaymentController;
+    @Inject
+    private InwardDepositController inwardDepositController;
     @EJB
     private AppointmentFacade appointmentFacade;
     @EJB
@@ -2345,6 +2498,18 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
      * current admission. Populated by {@link #navigateToAppointmentDepositConversion()}.
      */
     private Appointment pendingAppointmentConversion;
+
+    /** Id of the INWARD_APPOINTMENT_CANCEL_BILL created by the last conversion. */
+    private Long lastConversionCancelBillId;
+
+    /** Id of the INWARD_DEPOSIT bill created by the last conversion. */
+    private Long lastConversionDepositBillId;
+
+    /** Lazily-loaded, request-lifetime cache for {@link #getConversionCancelReceipt()}. */
+    private InwardBillReceiptDTO conversionCancelReceipt;
+
+    /** Lazily-loaded, request-lifetime cache for {@link #getConversionDepositReceipt()}. */
+    private InwardBillReceiptDTO conversionDepositReceipt;
 
     public Appointment getPendingAppointmentConversion() {
         return pendingAppointmentConversion;
@@ -2383,6 +2548,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
     }
 
     public String navigateToAppointmentDepositConversion() {
+        printPreview = false;
         if (!webUserController.hasPrivilege("InwardEditPaymentDetails")) {
             JsfUtil.addErrorMessage("You are not authorized to convert appointment deposits.");
             return "";
@@ -2432,27 +2598,60 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         Bill originalBill = pendingAppointmentConversion.getBill();
         double amount = originalBill.getTotal();
 
-        appointmentController.cancelAppointmentBillForConversion(
+        Bill cancelBill = appointmentController.cancelAppointmentBillForConversion(
                 originalBill,
                 pendingAppointmentConversion,
                 "Converted to Inward Deposit on Admission — BHT " + getCurrent().getBhtNo());
+        lastConversionCancelBillId = cancelBill.getId();
 
         PaymentMethod appointmentPaymentMethod = originalBill.getPaymentMethod() != null
                 ? originalBill.getPaymentMethod()
                 : getCurrent().getPaymentMethod();
         PaymentMethodData conversionPaymentMethodData = buildPaymentMethodDataFromOriginalPayment(originalBill, appointmentPaymentMethod, amount);
         if (conversionPaymentMethodData != null) {
-            getInwardPaymentController().setPaymentMethodData(conversionPaymentMethodData);
+            getInwardDepositController().setPaymentMethodData(conversionPaymentMethodData);
         }
-        getInwardPaymentController().setPaymentMethod(appointmentPaymentMethod);
-        getInwardPaymentController().getCurrent().setPaymentMethod(appointmentPaymentMethod);
-        getInwardPaymentController().getCurrent().setPatientEncounter(current);
-        getInwardPaymentController().getCurrent().setTotal(amount);
-        getInwardPaymentController().pay();
-        getInwardPaymentController().makeNull();
+        getInwardDepositController().setPaymentMethod(appointmentPaymentMethod);
+        getInwardDepositController().getCurrent().setPaymentMethod(appointmentPaymentMethod);
+        getInwardDepositController().getCurrent().setPatientEncounter(current);
+        getInwardDepositController().getCurrent().setTotal(amount);
+        getInwardDepositController().pay();
+        lastConversionDepositBillId = getInwardDepositController().getCurrent().getId();
+        getInwardDepositController().makeNull();
 
         pendingAppointmentConversion = null;
+        printPreview = true;
         JsfUtil.addSuccessMessage("Appointment deposit converted to Inward Deposit.");
+    }
+
+    /**
+     * Print DTO for the INWARD_APPOINTMENT_CANCEL_BILL receipt from the most
+     * recent {@link #convertAppointmentDepositToInwardDeposit()} call. Null
+     * until a conversion has succeeded (see {@link #isPrintPreview()}).
+     */
+    public InwardBillReceiptDTO getConversionCancelReceipt() {
+        if (lastConversionCancelBillId == null) {
+            return null;
+        }
+        if (conversionCancelReceipt == null || !lastConversionCancelBillId.equals(conversionCancelReceipt.getBillId())) {
+            conversionCancelReceipt = getBillFacade().findInwardBillReceiptDTO(lastConversionCancelBillId);
+        }
+        return conversionCancelReceipt;
+    }
+
+    /**
+     * Print DTO for the INWARD_DEPOSIT receipt from the most recent
+     * {@link #convertAppointmentDepositToInwardDeposit()} call. Null until a
+     * conversion has succeeded (see {@link #isPrintPreview()}).
+     */
+    public InwardBillReceiptDTO getConversionDepositReceipt() {
+        if (lastConversionDepositBillId == null) {
+            return null;
+        }
+        if (conversionDepositReceipt == null || !lastConversionDepositBillId.equals(conversionDepositReceipt.getBillId())) {
+            conversionDepositReceipt = getBillFacade().findInwardBillReceiptDTO(lastConversionDepositBillId);
+        }
+        return conversionDepositReceipt;
     }
 
     /**
@@ -2534,6 +2733,65 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             return;
         }
         setPatient(ap.getPatient());
+        prefillAdmissionFromAppointment(ap);
+    }
+
+    /**
+     * Pre-fills the admission form from the appointment being admitted so staff
+     * do not have to re-key what the appointment already captured. (#23620)
+     *
+     * <ul>
+     *   <li>Consultant &larr; the appointment bill's referring doctor.</li>
+     *   <li>Room &larr; the reservation's room, when the reservation is a room
+     *       reservation and that room is still vacant.</li>
+     *   <li>Admission Type &larr; the single {@link AdmissionType} whose fixed
+     *       {@code roomFacilityCharge} is that room, and only when exactly one
+     *       matches - otherwise it is left for staff to choose.</li>
+     * </ul>
+     *
+     * Every field is only set when it is currently empty, so this never
+     * overrides a value staff have already entered.
+     */
+    private void prefillAdmissionFromAppointment(Bill appointmentBill) {
+        if (getCurrent() == null) {
+            return;
+        }
+        if (getCurrent().getReferringConsultant() == null && appointmentBill.getReferredBy() != null) {
+            getCurrent().setReferringConsultant(appointmentBill.getReferredBy());
+        }
+        Reservation res = getCurrentReservation();
+        // currentReservation is @SessionScoped and is NOT set by every caller of
+        // this listener (the admission form's own "Appointment" search tab calls
+        // it without a reservation). Only trust it for the room / admission-type
+        // prefill when it actually belongs to the appointment being admitted -
+        // otherwise a stale reservation from an earlier, abandoned calendar
+        // "To Admit" click would apply the wrong room. (#23620)
+        if (res == null || res.getRoom() == null
+                || res.getAppointment() == null || res.getAppointment().getBill() == null
+                || !res.getAppointment().getBill().equals(appointmentBill)) {
+            return;
+        }
+        RoomFacilityCharge reservedRoom = res.getRoom();
+        if (reservedRoom.getRoom() != null && getInwardBean().isRoomFilled(reservedRoom.getRoom())) {
+            // Reserved room has since been taken - leave selection to staff.
+            return;
+        }
+        if (getPatientRoom() != null && getPatientRoom().getRoomFacilityCharge() == null) {
+            getPatientRoom().setRoomFacilityCharge(reservedRoom);
+        }
+        if (getCurrent().getAdmissionType() == null) {
+            AdmissionType matchedType = null;
+            int matchCount = 0;
+            for (AdmissionType at : admissionTypeController.getItems()) {
+                if (reservedRoom.equals(at.getRoomFacilityCharge())) {
+                    matchedType = at;
+                    matchCount++;
+                }
+            }
+            if (matchCount == 1) {
+                getCurrent().setAdmissionType(matchedType);
+            }
+        }
     }
 
     @Inject
@@ -2649,8 +2907,29 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                 + "AND a.discharged = false";
         HashMap<String, Object> params = new HashMap<>();
         params.put("patient", getCurrent().getPatient());
+        // Editing/re-saving an admission that is itself the active one must not
+        // flag itself as a duplicate of itself. (Issue #23514)
+        if (getCurrent().getId() != null) {
+            jpql += " AND a.id != :currentAdmissionId";
+            params.put("currentAdmissionId", getCurrent().getId());
+        }
         long count = getFacade().findLongByJpql(jpql, params);
         return count > 0;
+    }
+
+    public boolean isShowActiveAdmissionWarning() {
+        return showActiveAdmissionWarning;
+    }
+
+    /**
+     * Server round-trip for the {@code dlgActiveAdmission} "Cancel" button so the
+     * session-scoped {@link #showActiveAdmissionWarning} flag is actually cleared
+     * — a purely client-side {@code hide()} would leave it {@code true} and the
+     * dialog would reappear on the next unrelated full postback of this form.
+     * (Issue #23514)
+     */
+    public void cancelActiveAdmissionWarning() {
+        showActiveAdmissionWarning = false;
     }
 
     /**
@@ -2808,14 +3087,30 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
     }
 
     private void proceedWithAdmissionCheck() {
-        if (getCurrent().getPatient() != null && isPatientAlreadyAdmitted()) {
-            PrimeFaces.current().executeScript("PF('dlgActiveAdmission').show();");
+        showActiveAdmissionWarning = false;
+        // Hard block (Issue #23514): errorCheck() enforces this unconditionally
+        // on every save path (including the dialog's own "Yes, Proceed" button),
+        // so when it's on there's no need for — and no correct way to show — the
+        // soft-warning dialog first. Let saveSelected() -> errorCheck() reject it
+        // with a proper error message instead.
+        boolean hardBlockEnabled = configOptionApplicationController.getBooleanValueByKey(
+                "Inward Admission - Enforce Hard Block on Duplicate Active Admission", false);
+        if (!hardBlockEnabled && getCurrent().getPatient() != null && isPatientAlreadyAdmitted()) {
+            showActiveAdmissionWarning = true;
         } else {
             saveSelected();
         }
     }
 
     public void saveSelected() {
+        // Reached either past the duplicate-admission gate (proceedWithAdmissionCheck)
+        // or via the warning dialog's own "Yes, Proceed" override — either way that
+        // check is settled for this attempt, so clear it now rather than only on
+        // success. Otherwise an unrelated errorCheck() failure below (e.g. missing
+        // Payment Method) leaves the flag true and the dialog reappears on the
+        // update="@form" response, on top of the real validation error. (Issue #23514,
+        // CodeRabbit review on PR #23565)
+        showActiveAdmissionWarning = false;
         if (admittingProcessStarted) {
             JsfUtil.addErrorMessage("Admittin process already started.");
             return;
@@ -2904,18 +3199,22 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                     getSessionController().getLoggedUser());
         }
 
+        // Held outside the room block so the automatic admission charges below can
+        // retire it if they fail - a room-less Rapid / Temp A&E admission simply
+        // leaves it null. (Issue #23594)
+        PatientRoom createdPatientRoom = null;
+
         // Only create a PatientRoom record when a facility charge is actually selected.
         // For Rapid / Temp A&E admissions the room validation is skipped, so
         // getRoomFacilityCharge() may be null; attempting to save it would NPE. (Issue #21183)
         if (getPatientRoom().getRoomFacilityCharge() != null) {
             PatientRoom currentPatientRoom = new PatientRoom();
-            if (configOptionApplicationController.getBooleanValueByKey("Patient admission and room assignment are simultaneous processes.", true)) {
-                currentPatientRoom = getInwardBean().savePatientRoom(getPatientRoom(), null, getPatientRoom().getRoomFacilityCharge(), getCurrent(), getCurrent().getDateOfAdmission(), getSessionController().getLoggedUser(), true);
-                getCurrent().setRoomAdmitted(true);
-            } else {
-                getCurrent().setRoomAdmitted(false);
-                currentPatientRoom = getInwardBean().savePatientRoom(getPatientRoom(), getCurrent(), getSessionController().getLoggedUser());
-            }
+            // Room is always fully set up (charges, admittedAt, admitted=true) at admission
+            // time, regardless of the "simultaneous processes" config — that config only
+            // controls whether a nurse handover request is also created below (Issue #23145).
+            currentPatientRoom = getInwardBean().savePatientRoom(getPatientRoom(), null, getPatientRoom().getRoomFacilityCharge(), getCurrent(), getCurrent().getDateOfAdmission(), getSessionController().getLoggedUser(), true);
+            getCurrent().setRoomAdmitted(true);
+            createdPatientRoom = currentPatientRoom;
 
             getCurrent().setCurrentPatientRoom(currentPatientRoom);
 
@@ -2951,7 +3250,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                 }
             }
 
-            if (!getCurrent().isRoomAdmitted() && currentPatientRoom != null && currentPatientRoom.getRoomFacilityCharge() != null) {
+            if (!configOptionApplicationController.getBooleanValueByKey("Patient admission and room assignment are simultaneous processes.", true)
+                    && currentPatientRoom != null && currentPatientRoom.getRoomFacilityCharge() != null) {
                 PatientTransferRequest handoverRequest = new PatientTransferRequest();
                 handoverRequest.setAdmission(getCurrent());
                 handoverRequest.setFromPatientRoom(null);
@@ -3025,6 +3325,12 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
 
         saveEncounterCreditCompanies(current);
 
+        // Automatic admission charges — outside the room block on purpose, since a
+        // room-less Rapid / Temp A&E admission still has to be charged. (Issue #23594)
+        if (!applyAutomaticAdmissionCharges(createdPatientRoom)) {
+            return;
+        }
+
         if (isNewAdmission) {
             String auditTrigger = getCurrent().getParentEncounter() != null
                     ? "Baby Admission Created" : "Admission Created";
@@ -3076,9 +3382,14 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             JsfUtil.addSuccessMessage("Patient admitted successfully with BHT No: " + getCurrent().getBhtNo());
         }
 
+        // Held outside the room block so the automatic admission charges below can
+        // retire it if they fail. (Issue #23594)
+        PatientRoom createdPatientRoom = null;
+
         if (getCurrent().getAdmissionType().isRoomChargesAllowed() || getPatientRoom().getRoomFacilityCharge() != null) {
             PatientRoom currentPatientRoom = getInwardBean().savePatientRoom(getPatientRoom(), null, getPatientRoom().getRoomFacilityCharge(), getCurrent(), getCurrent().getDateOfAdmission(), getSessionController().getLoggedUser());
             getCurrent().setCurrentPatientRoom(currentPatientRoom);
+            createdPatientRoom = currentPatientRoom;
 
             if (currentPatientRoom != null && currentPatientRoom.getRoomFacilityCharge() != null) {
                 PatientTransferRequest handoverRequest = new PatientTransferRequest();
@@ -3106,6 +3417,11 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
 
         saveEncounterCreditCompanies(current);
 
+        // Automatic admission charges — same hook as saveSelected(). (Issue #23594)
+        if (!applyAutomaticAdmissionCharges(createdPatientRoom)) {
+            return;
+        }
+
         getCurrentNonBht().setParentEncounter(current);
         getCurrentNonBht().setDischarged(true);
         getCurrentNonBht().setDateOfDischarge(new Date());
@@ -3120,6 +3436,50 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         // Save EncounterCreditCompanies
         // Need to create EncounterCredit
         printPreview = true;
+    }
+
+    /**
+     * Bills the configured automatic admission charges for the admission just
+     * saved (issue #23594).
+     *
+     * <p>Compensating transaction, same pattern as the inpatient package
+     * application above: this controller is a CDI bean and is not itself
+     * transactional, so the admission and the room were each already committed
+     * in earlier transactions. A failure here cannot be rolled back by the
+     * container, and would otherwise leave a half-charged admission - so retire
+     * what was created and surface a clear error instead.</p>
+     *
+     * @return {@code true} to carry on, {@code false} when the admission was
+     * rolled back and the caller must stop
+     */
+    private boolean applyAutomaticAdmissionCharges(PatientRoom createdPatientRoom) {
+        try {
+            admissionChargeApplicationBean.applyAdmissionChargesToAdmission(
+                    getCurrent(), getSessionController().getLoggedUser(), getSessionController().getDepartment());
+            return true;
+        } catch (RuntimeException ex) {
+            logger.log(Level.SEVERE, "Automatic admission charges failed for admission " + getCurrent().getBhtNo(), ex);
+            Date now = new Date();
+            String reason = "Auto-retired: automatic admission charges failed - " + ex.getMessage();
+
+            if (createdPatientRoom != null) {
+                createdPatientRoom.setRetired(true);
+                createdPatientRoom.setRetireComments(reason);
+                createdPatientRoom.setRetirer(getSessionController().getLoggedUser());
+                createdPatientRoom.setRetiredAt(now);
+                patientRoomFacade.edit(createdPatientRoom);
+            }
+
+            getCurrent().setRetired(true);
+            getCurrent().setRetireComments(reason);
+            getCurrent().setRetirer(getSessionController().getLoggedUser());
+            getCurrent().setRetiredAt(now);
+            getFacade().edit(getCurrent());
+
+            JsfUtil.addErrorMessage("Automatic admission charges could not be applied and this admission has been cancelled. Please retry. (" + ex.getMessage() + ")");
+            admittingProcessStarted = false;
+            return false;
+        }
     }
 
     public void saveEncounterCreditCompanies(PatientEncounter current) {
@@ -3439,6 +3799,14 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
 
     public void setInwardPaymentController(InwardPaymentController inwardPaymentController) {
         this.inwardPaymentController = inwardPaymentController;
+    }
+
+    public InwardDepositController getInwardDepositController() {
+        return inwardDepositController;
+    }
+
+    public void setInwardDepositController(InwardDepositController inwardDepositController) {
+        this.inwardDepositController = inwardDepositController;
     }
 
     public AppointmentFacade getAppointmentFacade() {

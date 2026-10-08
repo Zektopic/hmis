@@ -28,6 +28,7 @@ import java.util.logging.Logger;
 import javax.activation.DataHandler;
 import javax.activation.DataSource;
 import javax.activation.FileDataSource;
+import javax.ejb.Asynchronous;
 import javax.ejb.EJB;
 import javax.ejb.Schedule;
 import javax.ejb.Stateless;
@@ -167,6 +168,11 @@ public class EmailManagerEjb {
 
     private boolean sendEmailViaRestGateway(String subject, String body, List<String> recipients, boolean isHtml,
             List<EmailAttachment> attachments) {
+        return sendEmailViaRestGateway(subject, body, recipients, null, null, isHtml, attachments);
+    }
+
+    private boolean sendEmailViaRestGateway(String subject, String body, List<String> recipients,
+            List<String> cc, List<String> bcc, boolean isHtml, List<EmailAttachment> attachments) {
         String messengerServiceURL = configOptionApplicationController.getShortTextValueByKey("Email Gateway - URL", "");
 
         if (messengerServiceURL == null || messengerServiceURL.trim().isEmpty()) {
@@ -176,7 +182,7 @@ public class EmailManagerEjb {
 
         HttpURLConnection connection = null;
         try {
-            JSONObject payload = buildEmailJsonPayload(subject, body, recipients, isHtml, attachments);
+            JSONObject payload = buildEmailJsonPayload(subject, body, recipients, cc, bcc, isHtml, attachments);
 
             URL url = new URL(messengerServiceURL);
             connection = (HttpURLConnection) url.openConnection();
@@ -233,6 +239,11 @@ public class EmailManagerEjb {
 
     private JSONObject buildEmailJsonPayload(String subject, String body, List<String> recipients, boolean isHtml,
             List<EmailAttachment> attachments) {
+        return buildEmailJsonPayload(subject, body, recipients, null, null, isHtml, attachments);
+    }
+
+    private JSONObject buildEmailJsonPayload(String subject, String body, List<String> recipients,
+            List<String> cc, List<String> bcc, boolean isHtml, List<EmailAttachment> attachments) {
         final String username = configOptionApplicationController.getShortTextValueByKey("Email Gateway - Username", "");
         final String password = configOptionApplicationController.getShortTextValueByKey("Email Gateway - Password", "");
         final String smtpHost = configOptionApplicationController.getShortTextValueByKey("Email Gateway - SMTP Host", "");
@@ -249,6 +260,23 @@ public class EmailManagerEjb {
             recipientArray.put(recipient);
         }
         payload.put("recipients", recipientArray);
+
+        // Only include cc/bcc when present so older messenger deployments
+        // (and existing single-recipient callers) keep working unchanged.
+        if (cc != null && !cc.isEmpty()) {
+            JSONArray ccArray = new JSONArray();
+            for (String address : cc) {
+                ccArray.put(address);
+            }
+            payload.put("cc", ccArray);
+        }
+        if (bcc != null && !bcc.isEmpty()) {
+            JSONArray bccArray = new JSONArray();
+            for (String address : bcc) {
+                bccArray.put(address);
+            }
+            payload.put("bcc", bccArray);
+        }
 
         // Only include the key when attachments exist so older messenger
         // deployments keep accepting attachment-less payloads unchanged.
@@ -409,6 +437,20 @@ public class EmailManagerEjb {
         }
     }
 
+    /**
+     * Sends an email with To/CC/BCC and optional attachments. Requires a
+     * messenger deployment that supports the "cc"/"bcc" payload fields.
+     */
+    public boolean sendEmail(final List<String> recipients, final List<String> cc, final List<String> bcc,
+            final String body, final String subject, final boolean isHtml, final List<EmailAttachment> attachments) {
+        try {
+            return sendEmailViaRestGateway(subject, body, recipients, cc, bcc, isHtml, attachments);
+        } catch (Exception e) {
+            Logger.getLogger(EmailManagerEjb.class.getName()).log(Level.SEVERE, "Failed to send email: " + e.getMessage(), e);
+            return false;
+        }
+    }
+
     @Deprecated // Will be remove soon
     public boolean sendEmail(final List<String> recipients, final String body, final String subject, final boolean isHtml, boolean legacyMethod) {
         final String username = configOptionApplicationController.getShortTextValueByKey("Email Gateway - Username", "");
@@ -460,6 +502,41 @@ public class EmailManagerEjb {
 
     public EmailFacade getEmailFacade() {
         return emailFacade;
+    }
+
+    /**
+     * Dispatches a persisted {@link AppEmail} row asynchronously and updates
+     * its sending status. Must never throw: this runs on a container-managed
+     * async thread, so an escaping exception would be invisible to the caller.
+     */
+    @Asynchronous
+    public void sendAppEmailAsync(AppEmail email) {
+        try {
+            if (email == null || email.getReceipientEmail() == null || email.getReceipientEmail().trim().isEmpty()) {
+                return;
+            }
+            boolean success = sendEmail(
+                    Collections.singletonList(email.getReceipientEmail()),
+                    email.getMessageBody(),
+                    email.getMessageSubject(),
+                    true
+            );
+            if (success) {
+                email.setSentSuccessfully(true);
+                email.setPending(false);
+                email.setSentAt(new Date());
+            } else {
+                email.setSentSuccessfully(false);
+                email.setPending(true);
+                Logger.getLogger(EmailManagerEjb.class.getName()).log(Level.WARNING,
+                        "Failed to send AppEmail to {0} with subject \"{1}\"",
+                        new Object[]{email.getReceipientEmail(), email.getMessageSubject()});
+            }
+            emailFacade.edit(email);
+        } catch (Exception e) {
+            Logger.getLogger(EmailManagerEjb.class.getName()).log(Level.WARNING,
+                    "Unexpected error while sending AppEmail: " + e.getMessage(), e);
+        }
     }
 
 }

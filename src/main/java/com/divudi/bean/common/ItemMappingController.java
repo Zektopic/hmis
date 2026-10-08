@@ -1,10 +1,14 @@
 package com.divudi.bean.common;
 
 import com.divudi.core.data.ItemLight;
+import com.divudi.core.data.dto.ItemMappingCandidateDTO;
 import com.divudi.core.entity.Department;
 import com.divudi.core.entity.Institution;
 import com.divudi.core.entity.Item;
 import com.divudi.core.entity.ItemMapping;
+import com.divudi.core.entity.Service;
+import com.divudi.core.entity.inward.InwardService;
+import com.divudi.core.entity.lab.Investigation;
 import com.divudi.core.facade.ItemFacade;
 import com.divudi.core.facade.ItemMappingFacade;
 import com.divudi.core.util.JsfUtil;
@@ -53,13 +57,87 @@ public class ItemMappingController implements Serializable {
     private Item item;
     private ItemMapping selectedItemMapping;
     private List<Item> selectedItems;
+    // Backing lists for the redesigned mapping pages' available-items picker
+    // (issue #24079): availableItems is the left-hand candidate list built by
+    // fillAvailableItems(), selectedCandidates is whatever the user checked
+    // off it. The older Item-based selectedItems path above is kept working
+    // for any other caller.
+    private List<ItemMappingCandidateDTO> availableItems;
+    private List<ItemMappingCandidateDTO> selectedCandidates;
+    // Outside-charge-specific mapping page state (issue #23250, Mode B) —
+    // kept separate from `institution`/`department` above so the general
+    // mapping pages and this one don't clobber each other's selection when
+    // both are open in the same session.
+    private Institution outsideChargeSite;
+
+    /**
+     * Populates {@link #availableItems} for the redesigned mapping pages
+     * (issue #24079): every non-retired Investigation/Service/InwardService,
+     * eligible to be mapped to a department, institution, or outside-charge
+     * site. Run as three separate queries (one per subtype, each passing its
+     * own itemType label) rather than a single TYPE(i)-based CASE WHEN
+     * projection, since constructor-query support for that is not guaranteed
+     * across EclipseLink versions.
+     */
+    public void fillAvailableItems() {
+        List<ItemMappingCandidateDTO> results = new ArrayList<>();
+        results.addAll(fetchCandidatesByType(Investigation.class, "Investigation"));
+        results.addAll(fetchCandidatesByType(Service.class, "Service"));
+        results.addAll(fetchCandidatesByType(InwardService.class, "Inward Service"));
+        results.sort((a, b) -> {
+            String an = a.getName() != null ? a.getName() : "";
+            String bn = b.getName() != null ? b.getName() : "";
+            return an.compareToIgnoreCase(bn);
+        });
+        availableItems = results;
+        selectedCandidates = new ArrayList<>();
+    }
+
+    private List<ItemMappingCandidateDTO> fetchCandidatesByType(Class<? extends Item> type, String label) {
+        String jpql = "SELECT new com.divudi.core.data.dto.ItemMappingCandidateDTO("
+                + "i.id, i.name, i.code, '" + label + "', "
+                + "ins.name, d.name, i.total, i.createdAt) "
+                + "FROM Item i "
+                + "LEFT JOIN i.institution ins "
+                + "LEFT JOIN i.department d "
+                + "WHERE i.retired = false AND TYPE(i) = :itype "
+                + "ORDER BY i.name";
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("itype", type);
+        List<?> results = itemFacade.findLightsByJpql(jpql, parameters);
+        List<ItemMappingCandidateDTO> dtos = new ArrayList<>();
+        if (results != null) {
+            for (Object o : results) {
+                dtos.add((ItemMappingCandidateDTO) o);
+            }
+        }
+        return dtos;
+    }
+
+    /**
+     * Resolves the items to add for addAllSelectedItemsTo*(): prefers the new
+     * selectedCandidates picker (issue #24079) when the caller populated it,
+     * otherwise falls back to the older selectedItems path so any other
+     * caller of that field keeps working unchanged.
+     */
+    private List<Item> resolveItemsForAdd() {
+        if (selectedCandidates != null && !selectedCandidates.isEmpty()) {
+            List<Item> resolved = new ArrayList<>();
+            for (ItemMappingCandidateDTO candidate : selectedCandidates) {
+                Item i = itemFacade.find(candidate.getId());
+                // Skip items retired after the picker was loaded.
+                if (i != null && !i.isRetired()) {
+                    resolved.add(i);
+                }
+            }
+            return resolved;
+        }
+        return selectedItems;
+    }
 
     public void addAllSelectedItemsToInstitution() {
-        if (selectedItems == null) {
-            JsfUtil.addErrorMessage("No Items Selected");
-            return;
-        }
-        if (selectedItems.isEmpty()) {
+        List<Item> itemsToAdd = resolveItemsForAdd();
+        if (itemsToAdd == null || itemsToAdd.isEmpty()) {
             JsfUtil.addErrorMessage("No Items Selected");
             return;
         }
@@ -70,7 +148,7 @@ public class ItemMappingController implements Serializable {
         if (items == null) {
             items = new ArrayList<>();
         }
-        for (Item i : selectedItems) {
+        for (Item i : itemsToAdd) {
             ItemMapping im1 = findItemMapping(i, institution);
             if (im1 == null) {
                 im1 = new ItemMapping();
@@ -86,12 +164,14 @@ public class ItemMappingController implements Serializable {
             }
         }
         selectedItems = new ArrayList<>();
+        selectedCandidates = new ArrayList<>();
         fillItemMappingsForSelectedInstitution();
         JsfUtil.addSuccessMessage("All Added");
     }
 
     public void addAllSelectedItemsToDepartment() {
-        if (selectedItems == null || selectedItems.isEmpty()) {
+        List<Item> itemsToAdd = resolveItemsForAdd();
+        if (itemsToAdd == null || itemsToAdd.isEmpty()) {
             JsfUtil.addErrorMessage("No Items Selected");
             return;
         }
@@ -102,7 +182,7 @@ public class ItemMappingController implements Serializable {
         if (items == null) {
             items = new ArrayList<>();
         }
-        for (Item i : selectedItems) {
+        for (Item i : itemsToAdd) {
             ItemMapping im = findItemMapping(i, department);
             if (im == null) {
                 im = new ItemMapping();
@@ -117,14 +197,21 @@ public class ItemMappingController implements Serializable {
                 items.add(im);
             }
         }
+        selectedItems = new ArrayList<>();
+        selectedCandidates = new ArrayList<>();
+        fillItemMappingsForSelectedDepartment();
         JsfUtil.addSuccessMessage("All Added");
     }
 
     public boolean mappingExists(Item i, Institution ins) {
+        // Excludes outside-charge-only mappings (issue #23250) so this
+        // general-purpose check/reactivate path never hijacks a row created
+        // by the dedicated outside-charge mapping page.
         String jpql = "select pavan "
                 + " from ItemMapping pavan "
                 + " where pavan.institution=:ins "
-                + " and pavan.item=:item ";
+                + " and pavan.item=:item "
+                + " and pavan.outsideChargeMapping=false ";
         Map m = new HashMap<>();
         m.put("ins", ins);
         m.put("item", i);
@@ -139,10 +226,12 @@ public class ItemMappingController implements Serializable {
     }
 
     public ItemMapping findItemMapping(Item i, Institution ins) {
+        // Excludes outside-charge-only mappings (issue #23250) — see mappingExists(Item, Institution).
         String jpql = "select pavan "
                 + " from ItemMapping pavan "
                 + " where pavan.institution=:ins "
-                + " and pavan.item=:item ";
+                + " and pavan.item=:item "
+                + " and pavan.outsideChargeMapping=false ";
         Map m = new HashMap<>();
         m.put("ins", ins);
         m.put("item", i);
@@ -220,6 +309,9 @@ public class ItemMappingController implements Serializable {
     }
 
     public void fillItemMappingsForSelectedDepartment() {
+        // Also refresh the All Items picker so services created since the page
+        // opened (e.g. through the API) can be mapped without leaving the page.
+        fillAvailableItems();
         if (department == null) {
             JsfUtil.addErrorMessage("Department ?");
             return;
@@ -235,32 +327,149 @@ public class ItemMappingController implements Serializable {
     }
 
     public void fillItemMappingsForSelectedInstitution() {
+        // Also refresh the All Items picker so services created since the page
+        // opened (e.g. through the API) can be mapped without leaving the page.
+        fillAvailableItems();
         if (institution == null) {
             JsfUtil.addErrorMessage("Institution");
             return;
         }
+        // Excludes outside-charge-only mappings (issue #23250) — see mappingExists(Item, Institution).
         String jpql = "SELECT im "
                 + "FROM ItemMapping im "
                 + "WHERE im.retired=false "
-                + "and im.institution = :inst";
+                + "and im.institution = :inst "
+                + "and im.outsideChargeMapping=false";
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("inst", institution);
         List<ItemMapping> itemMappings = getFacade().findByJpql(jpql, parameters);
         items = itemMappings;
     }
 
+    // ------------------------------------------------------------------
+    // Outside Charge Item Mapping (issue #23250, Mode B) — item eligibility
+    // for the Inward "Add Outside Charges" Item field, opt-in via the
+    // "Inward Outside Charge Requires Item Mapping" config key, keyed to
+    // the department's SITE (Department.getSite()), not the bare
+    // department. Kept on the same ItemMapping table but always guarded by
+    // outsideChargeMapping=true so it never overlaps with the generic
+    // mapping methods above.
+    // ------------------------------------------------------------------
+    public void addAllSelectedItemsToOutsideChargeSite() {
+        List<Item> itemsToAdd = resolveItemsForAdd();
+        if (itemsToAdd == null || itemsToAdd.isEmpty()) {
+            JsfUtil.addErrorMessage("No Items Selected");
+            return;
+        }
+        if (outsideChargeSite == null) {
+            JsfUtil.addErrorMessage("No Site Selected");
+            return;
+        }
+        if (items == null) {
+            items = new ArrayList<>();
+        }
+        for (Item i : itemsToAdd) {
+            ItemMapping im = findOutsideChargeItemMapping(i, outsideChargeSite);
+            if (im == null) {
+                im = new ItemMapping();
+                im.setItem(i);
+                im.setInstitution(outsideChargeSite);
+                im.setOutsideChargeMapping(true);
+                im.setCreater(sessionController.getLoggedUser());
+                im.setCreatedAt(new Date());
+                getFacade().create(im);
+                items.add(im);
+            } else if (im.isRetired()) {
+                im.setRetired(false);
+                getFacade().edit(im);
+                items.add(im);
+            }
+        }
+        selectedItems = new ArrayList<>();
+        selectedCandidates = new ArrayList<>();
+        fillItemMappingsForSelectedOutsideChargeSite();
+        JsfUtil.addSuccessMessage("All Added");
+    }
+
+    public ItemMapping findOutsideChargeItemMapping(Item i, Institution site) {
+        String jpql = "select im "
+                + " from ItemMapping im "
+                + " where im.institution=:site "
+                + " and im.item=:item "
+                + " and im.outsideChargeMapping=true ";
+        Map<String, Object> m = new HashMap<>();
+        m.put("site", site);
+        m.put("item", i);
+        List<ItemMapping> ims = getFacade().findByJpql(jpql, m);
+        if (ims == null || ims.isEmpty()) {
+            return null;
+        }
+        return ims.get(0);
+    }
+
+    public void fillItemMappingsForSelectedOutsideChargeSite() {
+        // Also refresh the All Items picker so services created since the page
+        // opened (e.g. through the API) can be mapped without leaving the page.
+        fillAvailableItems();
+        if (outsideChargeSite == null) {
+            JsfUtil.addErrorMessage("Site ?");
+            return;
+        }
+        String jpql = "SELECT im "
+                + "FROM ItemMapping im "
+                + "WHERE im.retired=false "
+                + "AND im.institution = :site "
+                + "AND im.outsideChargeMapping=true";
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("site", outsideChargeSite);
+        items = getFacade().findByJpql(jpql, parameters);
+    }
+
+    public void removeSelectedItemMappingForOutsideChargeSite() {
+        if (selectedItemMappings == null || selectedItemMappings.isEmpty()) {
+            JsfUtil.addErrorMessage("Nothing selected");
+            return;
+        }
+        removeSelectedItemMapping();
+        fillItemMappingsForSelectedOutsideChargeSite();
+    }
+
+    // Navigation method for managing Outside Charge Item Mappings
+    public String navigateToManageOutsideChargeItemMappings() {
+        fillAvailableItems();
+        return "/admin/items/manage_outside_charge_item_mappings?faces-redirect=true";
+    }
+
+    public Institution getOutsideChargeSite() {
+        return outsideChargeSite;
+    }
+
+    public void setOutsideChargeSite(Institution outsideChargeSite) {
+        this.outsideChargeSite = outsideChargeSite;
+    }
+
     // Navigation method for managing Department Item Mappings
     public String navigateToManageDepartmentItemMappings() {
+        fillAvailableItems();
         return "/admin/items/manage_department_item_mappings?faces-redirect=true";
     }
 
     // Navigation method for managing Institution Item Mappings
     public String navigateToManageInstitutionItemMappings() {
+        fillAvailableItems();
         return "/admin/items/manage_institution_item_mappings?faces-redirect=true";
     }
 
     public List<Item> completeItemByInstitution(String qry, Institution institution) {
         List<Item> results;
+        // NOTE: deliberately NOT filtering out outsideChargeMapping=true rows here.
+        // This is a live OPD/Optician/Collecting-Centre billing autocomplete path
+        // (a projection query that otherwise never needs to touch the new column),
+        // and adding that filter would make it require OUTSIDECHARGEMAPPING to exist
+        // in the DB from the moment this deploys, before an admin has necessarily
+        // run the "Add Missing Fields" DDL step (issue #23250). The admin-only
+        // mapping-management methods below already require that column regardless
+        // (they SELECT the full entity), so the isolation is enforced there instead.
         String jpql = "SELECT im.item FROM ItemMapping im "
                 + "WHERE (LOWER(im.item.name) LIKE :qry OR LOWER(im.item.fullName) LIKE :qry OR LOWER(im.item.code) LIKE :qry) "
                 + "AND im.institution = :institution "
@@ -304,6 +513,10 @@ public class ItemMappingController implements Serializable {
 
     public List<Item> fillItemByInstitution(Institution institution) {
         List<Item> results;
+        // NOTE: deliberately not filtering outsideChargeMapping here — see
+        // completeItemByInstitution(String, Institution) above. Also, outside-charge
+        // mappings never set `department`, so they cannot match `im.department.institution`
+        // regardless.
         String jpql = "SELECT im.item FROM ItemMapping im "
                 + " WHERE im.retired = false "
                 + " AND im.department.institution = :ins "
@@ -386,9 +599,11 @@ public class ItemMappingController implements Serializable {
         List<ItemMapping> list;
         String jpql;
         HashMap<String, Object> parameters = new HashMap<>();
+        // Excludes outside-charge-only mappings (issue #23250) — see mappingExists(Item, Institution).
         jpql = "SELECT im FROM ItemMapping im "
                 + "WHERE im.institution = :institution "
                 + "AND im.retired = false "
+                + "AND im.outsideChargeMapping = false "
                 + "ORDER BY im.item.name";
         parameters.put("institution", institution);
         list = getFacade().findByJpql(jpql, parameters);
@@ -494,6 +709,25 @@ public class ItemMappingController implements Serializable {
 
     public void setSelectedItems(List<Item> selectedItems) {
         this.selectedItems = selectedItems;
+    }
+
+    public List<ItemMappingCandidateDTO> getAvailableItems() {
+        if (availableItems == null) {
+            fillAvailableItems();
+        }
+        return availableItems;
+    }
+
+    public void setAvailableItems(List<ItemMappingCandidateDTO> availableItems) {
+        this.availableItems = availableItems;
+    }
+
+    public List<ItemMappingCandidateDTO> getSelectedCandidates() {
+        return selectedCandidates;
+    }
+
+    public void setSelectedCandidates(List<ItemMappingCandidateDTO> selectedCandidates) {
+        this.selectedCandidates = selectedCandidates;
     }
 
     public List<ItemMapping> getSelectedItemMappings() {

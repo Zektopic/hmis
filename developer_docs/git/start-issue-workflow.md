@@ -25,7 +25,7 @@ The `persistence.xml` committed on `development` uses CI/CD placeholders:
 The correct local JNDI names are stored in:
 `src/main/resources/META-INF/persistence_for_local_testing.xml`
 
-**Before pushing to remote**, revert `persistence.xml` back to placeholders (or use `/commit-code` / `verify-persistence` skill which checks this automatically).
+**Before pushing to remote**, revert `persistence.xml` back to placeholders — check it directly, or let `/commit-code` catch it (it verifies persistence.xml whenever it's staged).
 
 Reference: [persistence-workflow.md](../persistence/persistence-workflow.md)
 
@@ -39,6 +39,17 @@ gh issue edit <number> --repo hmislk/hmis --add-assignee <github-username>
 # If token lacks the scope, do it manually at:
 # https://github.com/orgs/hmislk/projects/11
 ```
+
+### Setting the board status (and verifying it)
+
+The full command sequence is in the [`start-issue` skill, Step 5](../../.claude/skills/start-issue/SKILL.md#step-5--project-board-carecode-hmis-board). It has four steps:
+
+1. Get the issue's node ID.
+2. `addProjectV2ItemById`. This returns the existing board item if the issue is already on the board, which is common because the "Item added to project" automation puts new issues in **Backlog**.
+3. `updateProjectV2ItemFieldValue` to set Status = In Progress.
+4. **Read the Status back** with `fieldValueByName(name:"Status")`.
+
+Step 4 is required. The update mutation's success response returns only the item ID, not the saved value, so it does not show that the change took effect. For issue #24105 the status was reported as "In Progress" based on that response alone, while the board still showed Backlog. Report only the value read back. If it isn't "In Progress", ask for a manual change on the board.
 
 ### Token Scope Note
 
