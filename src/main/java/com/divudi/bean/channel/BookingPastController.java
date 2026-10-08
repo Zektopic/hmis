@@ -525,6 +525,8 @@ public class BookingPastController implements Serializable {
                 consultants = getStaffFacade().findByJpql(sql, m);
             }
         } else {
+            // Prevent JPQL injection by parameterizing user input instead of string concatenation
+            m.put("con", "%" + getSelectTextConsultant().toUpperCase() + "%");
             if (selectTextConsultant.length() > 4) {
                 doctorSpecialityController.setSelectText("");
                 if (getSessionController().getInstitutionPreference().isShowOnlyMarkedDoctors()) {
@@ -532,7 +534,7 @@ public class BookingPastController implements Serializable {
                     sql = " select pi.staff from PersonInstitution pi where pi.retired=false "
                             + " and pi.type=:typ "
                             + " and pi.institution=:ins "
-                            + " and (pi.staff.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                            + " and upper(pi.staff.person.name) like :con "
                             + " order by pi.staff.person.name ";
 
                     m.put("ins", getSessionController().getInstitution());
@@ -541,9 +543,9 @@ public class BookingPastController implements Serializable {
 
                 } else {
                     sql = "select p from Staff p where p.retired=false "
-                            + " and (p.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                            + " and upper(p.person.name) like :con "
                             + " order by p.person.name";
-                    consultants = getStaffFacade().findByJpql(sql);
+                    consultants = getStaffFacade().findByJpql(sql, m);
                 }
 
             } else {
@@ -555,7 +557,7 @@ public class BookingPastController implements Serializable {
                                 + " and pi.type=:typ "
                                 + " and pi.institution=:ins "
                                 + " and pi.staff.speciality=:sp "
-                                + " and (pi.staff.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                                + " and upper(pi.staff.person.name) like :con "
                                 + " order by pi.staff.person.name ";
 
                         m.put("ins", getSessionController().getInstitution());
@@ -563,7 +565,7 @@ public class BookingPastController implements Serializable {
 
                     } else {
                         sql = "select p from Staff p where p.retired=false and p.speciality=:sp"
-                                + " and (p.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                                + " and upper(p.person.name) like :con "
                                 + " order by p.person.name";
                     }
                     consultants = getStaffFacade().findByJpql(sql, m);
