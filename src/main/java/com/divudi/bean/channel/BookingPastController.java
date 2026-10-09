@@ -529,21 +529,25 @@ public class BookingPastController implements Serializable {
                 doctorSpecialityController.setSelectText("");
                 if (getSessionController().getInstitutionPreference().isShowOnlyMarkedDoctors()) {
 
+                    // Parameterizing prevents JPQL injection attacks
                     sql = " select pi.staff from PersonInstitution pi where pi.retired=false "
                             + " and pi.type=:typ "
                             + " and pi.institution=:ins "
-                            + " and (pi.staff.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                            + " and upper(pi.staff.person.name) like :q "
                             + " order by pi.staff.person.name ";
 
                     m.put("ins", getSessionController().getInstitution());
                     m.put("typ", PersonInstitutionType.Channelling);
+                    m.put("q", "%" + getSelectTextConsultant().toUpperCase() + "%");
                     consultants = getStaffFacade().findByJpql(sql, m);
 
                 } else {
+                    // Parameterizing prevents JPQL injection attacks
                     sql = "select p from Staff p where p.retired=false "
-                            + " and (p.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                            + " and upper(p.person.name) like :q "
                             + " order by p.person.name";
-                    consultants = getStaffFacade().findByJpql(sql);
+                    m.put("q", "%" + getSelectTextConsultant().toUpperCase() + "%");
+                    consultants = getStaffFacade().findByJpql(sql, m);
                 }
 
             } else {
@@ -551,20 +555,24 @@ public class BookingPastController implements Serializable {
                 if (getSpeciality() != null) {
                     if (getSessionController().getInstitutionPreference().isShowOnlyMarkedDoctors()) {
 
+                        // Parameterizing prevents JPQL injection attacks
                         sql = " select pi.staff from PersonInstitution pi where pi.retired=false "
                                 + " and pi.type=:typ "
                                 + " and pi.institution=:ins "
                                 + " and pi.staff.speciality=:sp "
-                                + " and (pi.staff.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                                + " and upper(pi.staff.person.name) like :q "
                                 + " order by pi.staff.person.name ";
 
                         m.put("ins", getSessionController().getInstitution());
                         m.put("typ", PersonInstitutionType.Channelling);
+                        m.put("q", "%" + getSelectTextConsultant().toUpperCase() + "%");
 
                     } else {
+                        // Parameterizing prevents JPQL injection attacks
                         sql = "select p from Staff p where p.retired=false and p.speciality=:sp"
-                                + " and (p.person.name) like '%" + getSelectTextConsultant().toUpperCase() + "%' "
+                                + " and upper(p.person.name) like :q "
                                 + " order by p.person.name";
+                        m.put("q", "%" + getSelectTextConsultant().toUpperCase() + "%");
                     }
                     consultants = getStaffFacade().findByJpql(sql, m);
                 }
