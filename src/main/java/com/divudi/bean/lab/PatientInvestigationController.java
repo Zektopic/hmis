@@ -49,6 +49,7 @@ import com.divudi.core.data.DepartmentType;
 import com.divudi.core.data.InvestigationItemValueType;
 import com.divudi.core.data.dto.SampleDTO;
 import com.divudi.core.data.lab.BillBarcode;
+import com.divudi.core.data.lab.CollectingCentreBillingType;
 import com.divudi.core.data.lab.ListingEntity;
 import com.divudi.core.data.lab.PatientInvestigationStatus;
 import com.divudi.core.data.lab.PatientInvestigationWrapper;
@@ -218,6 +219,7 @@ public class PatientInvestigationController implements Serializable {
     private Staff referringDoctor;
     private Investigation investigation;
     private String investigationName;
+    private CollectingCentreBillingType collectingCentreBillingType;
     private String itemName;
     private Department department;
     private SearchDateType searchDateType;
@@ -1563,6 +1565,10 @@ public class PatientInvestigationController implements Serializable {
         return items;
     }
 
+    public void setItems(List<PatientInvestigation> items) {
+        this.items = items;
+    }
+
     public List<PatientInvestigation> getLstToSamle() {
         return lstToSamle;
     }
@@ -2884,6 +2890,7 @@ public class PatientInvestigationController implements Serializable {
         this.printIndividualBarcodes = false;
         this.listingEntity = null;
         this.investigationName = null;
+        this.collectingCentreBillingType = null;
         this.sampleSearchStrategy = null;
         clearReportData();
         clearAlternativeReportData();
@@ -2969,6 +2976,11 @@ public class PatientInvestigationController implements Serializable {
         if (patientName != null && !patientName.trim().isEmpty()) {
             jpql += " AND pi.billItem.bill.patient.person.name LIKE :patientName";
             params.put("patientName", "%" + getPatientName().trim() + "%");
+        }
+
+        if (collectingCentreBillingType != null) {
+            jpql += " AND pi.billItem.bill.ccBillingType = :ccBillingType";
+            params.put("ccBillingType", collectingCentreBillingType);
         }
 
         if (type != null && !type.trim().isEmpty()) {
@@ -3168,6 +3180,11 @@ public class PatientInvestigationController implements Serializable {
         if (patientName != null && !patientName.trim().isEmpty()) {
             jpql += " AND b.patient.person.name LIKE :patientName";
             params.put("patientName", "%" + getPatientName().trim() + "%");
+        }
+
+        if (collectingCentreBillingType != null) {
+            jpql += " AND b.ccBillingType = :ccBillingType";
+            params.put("ccBillingType", collectingCentreBillingType);
         }
 
         if (type != null && !type.trim().isEmpty()) {
@@ -3852,6 +3869,11 @@ public class PatientInvestigationController implements Serializable {
             params.put("patientName", "%" + getPatientName().trim() + "%");
         }
 
+        if (collectingCentreBillingType != null) {
+            jpql += " AND i.billItem.bill.ccBillingType = :ccBillingType ";
+            params.put("ccBillingType", collectingCentreBillingType);
+        }
+
         if (type != null && !type.trim().isEmpty()) {
             jpql += " AND i.billItem.bill.ipOpOrCc = :tp ";
             params.put("tp", getType().trim());
@@ -4496,6 +4518,11 @@ public class PatientInvestigationController implements Serializable {
             params.put("patientName", "%" + getPatientName().trim() + "%");
         }
 
+        if (collectingCentreBillingType != null) {
+            jpql += " AND i.billItem.bill.ccBillingType = :ccBillingType ";
+            params.put("ccBillingType", collectingCentreBillingType);
+        }
+
         if (type != null && !type.trim().isEmpty()) {
             jpql += " AND i.billItem.bill.ipOpOrCc = :tp ";
             params.put("tp", getType().trim());
@@ -4621,6 +4648,11 @@ public class PatientInvestigationController implements Serializable {
         if (patientName != null && !patientName.trim().isEmpty()) {
             jpql += " AND b.patient.person.name LIKE :patientName";
             params.put("patientName", "%" + getPatientName().trim() + "%");
+        }
+
+        if (collectingCentreBillingType != null) {
+            jpql += " AND b.ccBillingType = :ccBillingType";
+            params.put("ccBillingType", collectingCentreBillingType);
         }
 
         if (type != null && !type.trim().isEmpty()) {
@@ -6178,6 +6210,18 @@ public class PatientInvestigationController implements Serializable {
 
     public void setInvestigationName(String investigationName) {
         this.investigationName = investigationName;
+    }
+
+    public CollectingCentreBillingType getCollectingCentreBillingType() {
+        return collectingCentreBillingType;
+    }
+
+    public void setCollectingCentreBillingType(CollectingCentreBillingType collectingCentreBillingType) {
+        this.collectingCentreBillingType = collectingCentreBillingType;
+    }
+
+    public CollectingCentreBillingType[] getCollectingCentreBillingTypes() {
+        return CollectingCentreBillingType.values();
     }
 
     public List<PatientReportItemValue> getColumn1AntibioticList() {
