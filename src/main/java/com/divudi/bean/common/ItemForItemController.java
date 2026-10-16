@@ -236,7 +236,10 @@ public class ItemForItemController implements Serializable {
 
     public List<ItemForItem> getItems() {
         if (getParentItem() != null && getParentItem().getId() != null) {
-            items = getFacade().findByJpql("select c from ItemForItem c where c.retired=false and c.parentItem.id = " + getParentItem().getId() + " ");
+            // Fix SQL Injection by parameterizing the query
+            java.util.Map<String, Object> params = new java.util.HashMap<>();
+            params.put("parentId", getParentItem().getId());
+            items = getFacade().findByJpql("select c from ItemForItem c where c.retired=false and c.parentItem.id = :parentId", params);
         }
         if (items == null) {
             items = new ArrayList<ItemForItem>();
