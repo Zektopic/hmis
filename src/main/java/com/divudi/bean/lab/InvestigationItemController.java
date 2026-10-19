@@ -871,7 +871,10 @@ public class InvestigationItemController implements Serializable {
         if (getCurrentInvestigation() == null || getCurrentInvestigation().getId() == null) {
             items = new ArrayList<>();
         } else {
-            items = getEjbFacade().findByJpql("select ii from InvestigationItem ii where ii.retired=false and ii.item.id=" + getCurrentInvestigation().getId());
+            // SECURITY: Fixed JPQL Injection by using parameterized query
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("id", getCurrentInvestigation().getId());
+            items = getEjbFacade().findByJpql("select ii from InvestigationItem ii where ii.retired=false and ii.item.id=:id", m);
             userChangableItems = null;
             getUserChangableItems();
         }
