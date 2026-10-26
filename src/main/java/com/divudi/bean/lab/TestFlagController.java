@@ -296,7 +296,9 @@ public class TestFlagController implements Serializable {
         if (investigation != null) {
             Map m = new HashMap();
             m.put("iit", InvestigationItemType.Value);
-            investigationItemsOfValueType = getInvestigationItemFacade().findByJpql("select i from InvestigationItem i where i.retired=false and i.item.id = " + investigation.getId() + " and i.ixItemType =:iit", m, TemporalType.TIMESTAMP);
+            m.put("id", investigation.getId());
+            // Sentinel Security: Parameterized query to prevent JPQL Injection
+            investigationItemsOfValueType = getInvestigationItemFacade().findByJpql("select i from InvestigationItem i where i.retired=false and i.item.id = :id and i.ixItemType =:iit", m, TemporalType.TIMESTAMP);
         }
         if (investigationItemsOfValueType == null) {
             investigationItemsOfValueType = new ArrayList<InvestigationItem>();
