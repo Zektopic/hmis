@@ -69,6 +69,11 @@ public class PatientReportBeanTest {
         }
 
         @Override
+        public PatientReport findFirstByJpql(String jpql, Map<String, Object> parameters) {
+            return mockReport;
+        }
+
+        @Override
         public void create(PatientReport entity) {
             createCount++;
             lastCreatedReport = entity;
