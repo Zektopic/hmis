@@ -625,8 +625,12 @@ public class PatientReportBean {
         String sql;
         dl = ii.getName();
         long ageInDays = CommonFunctions.calculateAgeInDays(p.getPerson().getDob(), Calendar.getInstance().getTime());
-        sql = "select f from InvestigationItemValueFlag f where f.retired=false and f.fromAge <= " + ageInDays + " and f.toAge >= " + ageInDays + " and f.investigationItemOfLabelType.id = " + ii.getId();
-        List<InvestigationItemValueFlag> fs = iivfFacade.findByJpql(sql);
+        // SECURITY: Fix JPQL injection by parameterizing query inputs
+        sql = "select f from InvestigationItemValueFlag f where f.retired=false and f.fromAge <= :ageInDays and f.toAge >= :ageInDays and f.investigationItemOfLabelType.id = :iiId";
+        java.util.Map<String, Object> parameters = new java.util.HashMap<>();
+        parameters.put("ageInDays", ageInDays);
+        parameters.put("iiId", ii.getId());
+        List<InvestigationItemValueFlag> fs = iivfFacade.findByJpql(sql, parameters);
         for (InvestigationItemValueFlag f : fs) {
             if (f.getSex() == p.getPerson().getSex()) {
                 dl = f.getFlagMessage();
