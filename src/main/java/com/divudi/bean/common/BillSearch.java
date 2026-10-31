@@ -3340,7 +3340,10 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
 
     private void cancelPaymentItems(Bill originalBill) {
         List<BillItem> originalBillItems;
-        originalBillItems = getBillItemFacede().findByJpql("SELECT b FROM BillItem b WHERE b.retired=false and b.bill.id=" + originalBill.getId());
+        // Sentinel Security Fix: Parameterize JPQL query to prevent JPQL injection
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("billId", originalBill.getId());
+        originalBillItems = getBillItemFacede().findByJpql("SELECT b FROM BillItem b WHERE b.retired=false and b.bill.id = :billId", m);
         for (BillItem originalBillItem : originalBillItems) {
             if (originalBillItem.getPaidForBillFee() != null) {
                 originalBillItem.getPaidForBillFee().setPaidValue(0.0);
