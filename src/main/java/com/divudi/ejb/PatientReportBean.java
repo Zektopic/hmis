@@ -69,8 +69,11 @@ public class PatientReportBean {
         if (pi.getId() == null || pi.getId() == 0) {
             return null;
         }
-        sql = "Select r from PatientReport r where r.retired=false and r.patientInvestigation.id = " + pi.getId();
-        r = getPrFacade().findFirstByJpql(sql);
+        // Sentinel: Parameterized query to prevent JPQL injection
+        sql = "Select r from PatientReport r where r.retired=false and r.patientInvestigation.id = :piId";
+        java.util.Map<String, Object> m = new java.util.HashMap<>();
+        m.put("piId", pi.getId());
+        r = getPrFacade().findFirstByJpql(sql, m);
         if (r == null) {
             r = new PatientReport();
             r.setCreatedAt(new Date());
