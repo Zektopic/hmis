@@ -518,8 +518,11 @@ public class StoreBillSearch implements Serializable {
         double b = 0.0;
         double p = 0.0;
         for (BillItem bi : refundingItems) {
-            String sql = "select c from BillFee c where c.billItem.id = " + bi.getId();
-            List<BillFee> rbf = getBillFeeFacade().findByJpql(sql);
+            // Sentinel Security Fix: Parameterized JPQL query to prevent injection
+            String sql = "select c from BillFee c where c.billItem.id = :biId";
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("biId", bi.getId());
+            List<BillFee> rbf = getBillFeeFacade().findByJpql(sql, m);
             for (BillFee bf : rbf) {
 
                 if (bf.getFee().getStaff() == null) {
