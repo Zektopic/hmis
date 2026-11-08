@@ -25,6 +25,7 @@ import com.divudi.core.data.admin.PageMetadata;
 
 import com.divudi.core.data.ApplicationInstitution;
 import com.divudi.core.data.PaymentMethod;
+import com.divudi.core.data.Title;
 import com.divudi.core.data.dataStructure.ComponentDetail;
 import com.divudi.core.data.dataStructure.PaymentMethodData;
 import com.divudi.core.data.dataStructure.YearMonthDay;
@@ -54,6 +55,7 @@ import com.divudi.core.facade.PatientRoomFacade;
 import com.divudi.core.facade.PatientTransferRequestFacade;
 import com.divudi.core.entity.inward.PatientTransferRequest;
 import com.divudi.core.data.inward.EncounterRegistrationFlag;
+import com.divudi.service.inward.AdmissionGuardianRules;
 import com.divudi.core.data.inward.TransferRequestStatus;
 import com.divudi.core.facade.PersonFacade;
 import com.divudi.core.facade.RoomFacade;
@@ -230,6 +232,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
     private AdmissionType admissionTypeForSearch;
     private Admission perantAddmission;
     private List<Admission> childAdmissions;
+    /** Id of the admission childAdmissions was loaded for. */
+    private Long childAdmissionsParentId;
     private boolean patientDetailsEditable;
     private List<ClinicalFindingValue> patientAllergies;
     private ClinicalFindingValue currentPatientAllergy;
@@ -368,6 +372,37 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         ));
 
         metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Require Patient NIC or Guardian NIC",
+                "Block the admission when both the patient NIC and the guardian NIC are blank; either one is enough. "
+                + "Not applied to Provisional Emergency admissions at admit time. Turn off 'Guardian NIC is Required in Patient Admission' "
+                + "if the guardian NIC should only be needed when the patient has none (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Enforce Guardian Checks When Marking Provisional Emergency Complete",
+                "Apply the guardian checks (and the patient/guardian NIC rule, if on) when a Provisional Emergency admission is marked as verified (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Enforce Guardian Checks in Edit Admission Details",
+                "Apply the guardian checks (and the patient/guardian NIC rule, if on) when saving Edit Admission Details, so the fields cannot be cleared after admission. "
+                + "Provisional Emergency admissions are exempt (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Guardian Checks Treat Whitespace-Only Values as Missing",
+                "A guardian name, NIC, address or phone containing only spaces counts as missing in every guardian check (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
                 "Patient Admit - Enable Referred From in Patient Admission",
                 "Show the Referred From field during admission (default false)",
                 "inward/inward_admission",
@@ -398,6 +433,20 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         metadata.addConfigOption(new ConfigOptionInfo(
                 "Inward Admission - Patient NIC Required for Credit Admissions",
                 "Refuse a Credit admission when the patient's National ID Number is blank; any value, even '-', is accepted. Baby and Rapid / Temp A&E admissions are exempt. Independent of 'Patient Details Required in Patient Admission' (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Exempt Baby, Baby Of and Master Titles from Patient NIC Requirement",
+                "A blank patient NIC does not block the admission when the patient's title is Baby, Baby Of or Master. Applies to both 'Patient NIC is Required in Patient Admission' and 'Inward Admission - Patient NIC Required for Credit Admissions'. A NIC that is entered is still saved (default false)",
+                "inward/inward_admission",
+                OptionScope.APPLICATION
+        ));
+
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "Inward Admission - Require Guardian Name and NIC for Baby, Baby Of, Master Titles and Claimable Admissions",
+                "Block the admission when the guardian name or guardian NIC is blank and the patient's title is Baby, Baby Of or Master, or the admission is Claimable (Credit). Applies when the admission is created; Provisional Emergency and On Admission Death admissions are exempt. A value of only spaces counts as blank (default false)",
                 "inward/inward_admission",
                 OptionScope.APPLICATION
         ));
@@ -1156,6 +1205,29 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
                     + " or (lower(c.patient.phn)) like :q) "
                     + " order by c.bhtNo";
             h.put("q", "%" + normalizedQuery + "%");
+            suggestions = (List<PatientEncounterDto>) patientEncounterFacade.findLightsByJpql(sql, h, TemporalType.TIMESTAMP, 20);
+        }
+        return suggestions;
+    }
+
+    /**
+     * BHT autocomplete for reports (#24760): any admission, discharged or not.
+     */
+    public List<PatientEncounterDto> completeBhtDtosForReports(String query) {
+        List<PatientEncounterDto> suggestions;
+        if (query == null || query.trim().isEmpty()) {
+            suggestions = new ArrayList<>();
+        } else {
+            HashMap h = new HashMap();
+            String sql = "select new com.divudi.core.data.dto.PatientEncounterDto(c.id, c.patient.person.name, c.bhtNo, c.patient.phn) "
+                    + " from PatientEncounter c "
+                    + " where c.retired=false "
+                    + " and c.bhtNo is not null "
+                    + " and ((lower(c.bhtNo)) like :q "
+                    + " or (lower(c.patient.person.name)) like :q "
+                    + " or (lower(c.patient.phn)) like :q) "
+                    + " order by c.bhtNo";
+            h.put("q", "%" + query.trim().toLowerCase() + "%");
             suggestions = (List<PatientEncounterDto>) patientEncounterFacade.findLightsByJpql(sql, h, TemporalType.TIMESTAMP, 20);
         }
         return suggestions;
@@ -2069,10 +2141,13 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             person.setCreatedAt(Calendar.getInstance().getTime());
             person.setCreater(getSessionController().getLoggedUser());
 
-            if (person.getId() == null) {
-                getPersonFacade().create(person);
-            } else {
+            if (person.getId() != null) {
                 getPersonFacade().edit(person);
+            } else if (getPatient().getId() != null) {
+                // Existing patient: the patient is merged below, so a new person is persisted here.
+                // For a new patient, Patient.person is cascade = ALL and the patient's create saves
+                // the person; persisting it here as well wrote a second PERSON row (#23900).
+                getPersonFacade().create(person);
             }
         }
 
@@ -2341,7 +2416,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             }
             // Baby admissions typically have no NIC of their own yet, so this
             // admission-specific NIC-required check is skipped for them. (Issue #22998)
-            if (!isBabyAdmission() && configOptionApplicationController.getBooleanValueByKey("Patient NIC is Required in Patient Admission", false)) {
+            if (!isBabyAdmission() && !isNicExemptTitle() && configOptionApplicationController.getBooleanValueByKey("Patient NIC is Required in Patient Admission", false)) {
                 if (getCurrent().getPatient().getPerson().getNic() == null || getCurrent().getPatient().getPerson().getNic().trim().isEmpty()) {
                     JsfUtil.addErrorMessage("Patient NIC is Required");
                     patientDetailsHasError = true;
@@ -2368,7 +2443,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         // nor affects OPD/channelling. Any non-blank value (even "-") is accepted.
         // Baby and Rapid / Temp A&E admissions are exempt, matching the existing
         // NIC check. (Issue #23978)
-        if (!isRapidTempAe() && !isBabyAdmission()
+        if (!isRapidTempAe() && !isBabyAdmission() && !isNicExemptTitle()
                 && getCurrent().getPaymentMethod() == PaymentMethod.Credit
                 && configOptionApplicationController.getBooleanValueByKey("Inward Admission - Patient NIC Required for Credit Admissions", false)) {
             Person person = getCurrent().getPatient().getPerson();
@@ -2448,64 +2523,82 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             }
         }
 
-        if (!isRapidTempAe() && configOptionApplicationController.getBooleanValueByKey("Guardian Details Required in Patient Admission")) {
-            if (getCurrent().getGuardian() == null) {
-                JsfUtil.addErrorMessage("Guardian is Required");
-                return true;
-            }
-            // Each sub-field check below is independent of the others, so all of
-            // them are evaluated and reported together instead of stopping at the
-            // first miss — otherwise a form missing several guardian fields takes
-            // one submit/fix round-trip per field. (Issue #24564)
-            boolean guardianHasError = false;
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian Title is Required in Patient Admission", true)) {
-                if (getCurrent().getGuardian().getTitle() == null) {
-                    JsfUtil.addErrorMessage("Guardian Title is Required");
-                    guardianHasError = true;
+        // Guardian per-field checks and the "patient NIC, else guardian NIC" rule live in
+        // AdmissionGuardianRules so Edit Admission Details and "Mark as Verified" enforce
+        // exactly the same configuration. Provisional Emergency admissions are exempt
+        // here and are checked when the registration is marked complete. All problems are
+        // reported together. (Issues #24564, #25032)
+        if (!isRapidTempAe()) {
+            List<String> guardianErrors = AdmissionGuardianRules.validate(getCurrent(), configOptionApplicationController);
+            // Guardian name and NIC for Baby / Baby Of / Master titles and Claimable
+            // admissions. Admit-time only (not shared with Edit Admission Details or
+            // Mark as Verified). Messages already reported above are not repeated.
+            // (Issue #25190)
+            if (getCurrent().getEncounterRegistrationFlag() != EncounterRegistrationFlag.ON_ADMISSION_DEATH
+                    && isGuardianNameAndNicRequiredForTitleOrClaimable()) {
+                Person guardian = getCurrent().getGuardian();
+                // "Guardian is Required" (existing option) already covers a missing guardian.
+                boolean guardianAlreadyReportedMissing = guardian == null && guardianErrors.contains("Guardian is Required");
+                if (!guardianAlreadyReportedMissing && (guardian == null || isBlank(guardian.getName()))) {
+                    addErrorOnce(guardianErrors, "Guardian Name is Required");
+                }
+                if (!guardianAlreadyReportedMissing && (guardian == null || isBlank(guardian.getNic()))) {
+                    addErrorOnce(guardianErrors, "Guardian NIC is Required");
                 }
             }
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian Name is Required in Patient Admission", true)) {
-                if (getCurrent().getGuardian().getName() == null || getCurrent().getGuardian().getName().isEmpty()) {
-                    JsfUtil.addErrorMessage("Guardian Name is Required");
-                    guardianHasError = true;
+            if (!guardianErrors.isEmpty()) {
+                for (String guardianError : guardianErrors) {
+                    JsfUtil.addErrorMessage(guardianError);
                 }
-            }
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian NIC is Required in Patient Admission", true)) {
-                if (getCurrent().getGuardian().getNic() == null || getCurrent().getGuardian().getNic().isEmpty()) {
-                    JsfUtil.addErrorMessage("Guardian NIC is Required");
-                    guardianHasError = true;
-                }
-            }
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian Address is Required in Patient Admission", true)) {
-                if (getCurrent().getGuardian().getAddress() == null || getCurrent().getGuardian().getAddress().isEmpty()) {
-                    JsfUtil.addErrorMessage("Guardian Address is Required");
-                    guardianHasError = true;
-                }
-            }
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian Mobile Number is Required in Patient Admission", true)) {
-                if (getCurrent().getGuardian().getMobile() == null || getCurrent().getGuardian().getMobile().isEmpty()) {
-                    JsfUtil.addErrorMessage("Guardian Mobile Number is Required");
-                    guardianHasError = true;
-                }
-            }
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian Home Phone Number is Required in Patient Admission", false)) {
-                if (getCurrent().getGuardian().getPhone() == null || getCurrent().getGuardian().getPhone().isEmpty()) {
-                    JsfUtil.addErrorMessage("Guardian Home Phone Number is Required");
-                    guardianHasError = true;
-                }
-            }
-            if (configOptionApplicationController.getBooleanValueByKey("Guardian Relationship is Required in Patient Admission", true)) {
-                if (getCurrent().getGuardianRelationshipToPatient() == null) {
-                    JsfUtil.addErrorMessage("Guardian Relationship is Required");
-                    guardianHasError = true;
-                }
-            }
-            if (guardianHasError) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private static void addErrorOnce(List<String> errors, String message) {
+        if (!errors.contains(message)) {
+            errors.add(message);
+        }
+    }
+
+    private static boolean isBabyOrMasterTitle(Title title) {
+        return title == Title.Baby || title == Title.Baby_Of || title == Title.Master;
+    }
+
+    /**
+     * @return {@code true} when the option to exempt the Baby, Baby Of and
+     * Master titles from the patient NIC requirement is on and the patient has
+     * one of those titles. (Issue #25189)
+     */
+    private boolean isNicExemptTitle() {
+        if (getCurrent() == null || getCurrent().getPatient() == null || getCurrent().getPatient().getPerson() == null) {
+            return false;
+        }
+        return isBabyOrMasterTitle(getCurrent().getPatient().getPerson().getTitle())
+                && configOptionApplicationController.getBooleanValueByKey("Inward Admission - Exempt Baby, Baby Of and Master Titles from Patient NIC Requirement", false);
+    }
+
+    /**
+     * @return {@code true} when the guardian name and NIC option is on and the
+     * patient's title is Baby, Baby Of or Master, or the admission is
+     * Claimable (Credit). (Issue #25190)
+     */
+    private boolean isGuardianNameAndNicRequiredForTitleOrClaimable() {
+        if (!configOptionApplicationController.getBooleanValueByKey("Inward Admission - Require Guardian Name and NIC for Baby, Baby Of, Master Titles and Claimable Admissions", false)) {
+            return false;
+        }
+        boolean titleMatches = getCurrent().getPatient() != null
+                && getCurrent().getPatient().getPerson() != null
+                && isBabyOrMasterTitle(getCurrent().getPatient().getPerson().getTitle());
+        boolean claimable = getCurrent().isClaimable()
+                || getCurrent().getPaymentMethod() == PaymentMethod.Credit;
+        return titleMatches || claimable;
     }
 
     @Inject
@@ -2857,7 +2950,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             return;
         }
         Person p = new Person();
-        getPersonFacade().create(p);
+        // Saved by the patient's create below (Patient.person is cascade = ALL, #23900).
         Patient pt = new Patient();
         patientDetailsEditable = true;
         pt.setPerson(p);
@@ -3071,6 +3164,21 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             JsfUtil.addErrorMessage("No admission selected");
             return;
         }
+        // A provisional admission skips the guardian checks at admit time so the emergency
+        // path stays fast. When this option is on, they are enforced here, before the
+        // registration can be marked complete. (Issue #25032)
+        if (configOptionApplicationController.getBooleanValueByKey(
+                "Inward Admission - Enforce Guardian Checks When Marking Provisional Emergency Complete", false)) {
+            List<String> guardianErrors = AdmissionGuardianRules.validate(getCurrent(), configOptionApplicationController);
+            if (!guardianErrors.isEmpty()) {
+                for (String guardianError : guardianErrors) {
+                    JsfUtil.addErrorMessage(guardianError);
+                }
+                JsfUtil.addErrorMessage("The registration was not marked as complete. "
+                        + "Add the missing details (Edit Admission Details) and try again.");
+                return;
+            }
+        }
         Map<String, Object> before = new LinkedHashMap<>();
         before.put("registrationFlag", getCurrent().getEncounterRegistrationFlag());
         getCurrent().setEncounterRegistrationFlag(EncounterRegistrationFlag.STANDARD);
@@ -3220,7 +3328,6 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             getCurrent().setInstitution(sessionController.getInstitution());
             getCurrent().setDepartment(sessionController.getDepartment());
             getFacade().create(getCurrent());
-            JsfUtil.addSuccessMessage("Patient admitted successfully with BHT No: " + getCurrent().getBhtNo());
         }
 
         // Logged after create()/edit() so getCurrent().getId() is populated and the
@@ -3370,6 +3477,7 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         }
 
         if (isNewAdmission) {
+            JsfUtil.addSuccessMessage("Patient admitted successfully with BHT No: " + getCurrent().getBhtNo());
             String auditTrigger = getCurrent().getParentEncounter() != null
                     ? "Baby Admission Created" : "Admission Created";
             auditService.logEncounterAudit(getCurrent(), auditTrigger,
@@ -3417,7 +3525,6 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
             getCurrent().setInstitution(sessionController.getInstitution());
             getCurrent().setDepartment(sessionController.getDepartment());
             getFacade().create(getCurrent());
-            JsfUtil.addSuccessMessage("Patient admitted successfully with BHT No: " + getCurrent().getBhtNo());
         }
 
         // Held outside the room block so the automatic admission charges below can
@@ -3459,6 +3566,8 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         if (!applyAutomaticAdmissionCharges(createdPatientRoom)) {
             return;
         }
+
+        JsfUtil.addSuccessMessage("Patient admitted successfully with BHT No: " + getCurrent().getBhtNo());
 
         getCurrentNonBht().setParentEncounter(current);
         getCurrentNonBht().setDischarged(true);
@@ -4162,11 +4271,23 @@ public class AdmissionController implements Serializable, ControllerWithPatient 
         HashMap<String, Object> params = new HashMap<>();
         params.put("parent", current);
         childAdmissions = getFacade().findByJpql(jpql, params);
+        childAdmissionsParentId = current.getId();
     }
 
+    /**
+     * The current admission's baby admissions. Many pages open the Inpatient
+     * Dashboard by setting {@code current} directly (e.g. the Interim Bill's
+     * Inpatient Dashboard button), so the list is reloaded whenever it was
+     * loaded for a different admission (issue #24749).
+     */
     public List<Admission> getChildAdmissions() {
-        if (childAdmissions == null) {
-            childAdmissions = new ArrayList<>();
+        Long currentId = current != null ? current.getId() : null;
+        if (childAdmissions == null || !java.util.Objects.equals(childAdmissionsParentId, currentId)) {
+            fetchChildAdmissions();
+            if (childAdmissions == null) {
+                childAdmissions = new ArrayList<>();
+            }
+            childAdmissionsParentId = currentId;
         }
         return childAdmissions;
     }

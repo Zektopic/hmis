@@ -75,6 +75,21 @@ Invoke the `code-review` skill against this PR at **high** effort with
 `--comment`, so findings post directly to the PR (reuses the existing
 review engine instead of duplicating its logic).
 
+In parallel, dispatch these read-only subagents on the same PR (`.claude/agents/`;
+they return findings to you and never post):
+
+- `hmis-rules-reviewer`: always. *Trial (2026-11-07, dev-hub Q1): run it alongside
+  `code-review` for 2 weeks, until 2026-11-21, then the team decides whether one
+  replaces the other.*
+- `hmis-security-reviewer`: when the diff touches auth, tokens, HMAC/signed links,
+  `ws/`, privileges, `WebUser*`, filters or no-login (public) pages.
+- `hmis-ux-reviewer`: when the diff has `.xhtml`. Non-blocking: only its BLOCKING
+  rows (ui-guidelines/jsf-ajax rule breaks) count as findings; suggestions go in
+  the chat summary.
+
+Fold their findings into the classification below. Any of them you post as an
+inline comment goes through `hmis-public-guard` first.
+
 **Before classifying anything, run the fallback below** to confirm every
 finding the sub-agent claims to have posted actually landed — do this
 *before* the classification step decides to record `BLOCKED-REVIEW` and
@@ -171,15 +186,16 @@ flows) — don't ask when the diff makes the affected flow obvious.
 
 ### 2a. Build and local redeploy
 
-Per `playwright-e2e` §0a / `dev-issue` §6:
+Follow [Playwright E2E §0a](../../../developer_docs/testing/playwright-e2e-workflow.md#0a-rebuild-and-redeploy-local-code-changes-before-testing).
+Take the JDK, Maven and Payara locations from this machine's Claude memory, and the
+app name from `asadmin list-applications`. Paths differ between machines.
 
-```powershell
-$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-11.0.23.9-hotspot"
-& "D:\Program Files\NetBeans-18\netbeans\java\maven\bin\mvn.cmd" clean package -DskipTests
-& "D:\Payara\bin\asadmin.bat" redeploy --name rh "D:\Development\2024\hmis\target\rh-3.0.0.war"
-```
+Check the server log for deployment errors before proceeding.
 
-Check the server log for deployment errors before proceeding. **If `mvn
+**A failed `redeploy` can remove the app.** If the next `redeploy` says the app "is not
+deployed", use `deploy --name <app> --contextroot rh <war>`. Errors such as Hazelcast
+"all nodes in the cluster are lite members" come from the local server, not from the PR:
+restart the domain on JDK 11 (`AS_JAVA` set) and deploy again before deciding the build failed. **If `mvn
 clean package` fails, `asadmin redeploy` fails, or the server log shows
 deployment errors, stop this PR here**: capture the failure output, redact
 it of credentials/connection strings/hostnames (same rule as § Phase 3's
@@ -189,8 +205,11 @@ PR — don't attempt Phase 3 against a stale or undeployed build.
 
 ### Phase 3 — End-to-end verification
 
-Run via the `playwright-e2e` skill (login, department selection, AJAX-aware
-waits, DB verification per its workflow doc). **Reach every page through the
+Dispatch the `hmis-qa-verifier` subagent with the Phase 2 workflows and the two
+baseline checks below as its acceptance checks, plus the app root URL and
+environment. It runs the `playwright-e2e` workflow (login, department selection,
+AJAX-aware waits, DB verification per its workflow doc). Its `FAIL` verdict is
+blocking (`BLOCKED-E2E`); `BLOCKED` means set up the environment and re-run. **Reach every page through the
 menus, never by URL** — a URL-loaded page renders against uninitialised
 session state and can fail in ways no user can reach (`playwright-e2e` §2). For **every** PR that reaches
 this phase, run all three of the following — the two baseline checks are
@@ -223,6 +242,14 @@ uncertainties"); fixing is separate `dev-issue` work. Post the PR status
 comment (see § PR status comment) describing what failed, with the
 evidence redacted.
 
+Before posting `PASSED`, check that CodeRabbit has reviewed the PR's current head commit.
+`gh pr checks` doesn't show this. Run `gh api repos/hmislk/hmis/commits/<head-sha>/status --jq .state`
+(it must not be `pending`) and check that CodeRabbit's summary comment no longer says "review in progress".
+The only alternative: when CodeRabbit can't review (rate-limited or down), the PR carries a comment
+`CR skipped: <reason>` with a real reason. Then record PASSED with "CodeRabbit skipped: <reason>" in the status comment.
+Handle any new threads it posts the same way as Phase 1 findings. The `development` ruleset
+blocks merge while a thread is unresolved.
+
 All three pass → record `PASSED` and post the PR status comment (see
 § PR status comment).
 
@@ -234,7 +261,8 @@ all the way to `PASSED`). This is an intentional, carved-out exception to
 the general "never post top-level PR comments, only reply to reviewer
 threads" rule — merge-gate is reporting its own factual outcome, not review
 opinion needing threading, so a fresh top-level comment each run is
-correct, not noise. Post via:
+correct, not noise. Write the text to a file first and run the
+`hmis-public-guard` subagent on it; post only after a `PASS`. Post via:
 
 ```bash
 gh pr comment <PR> --body "..."

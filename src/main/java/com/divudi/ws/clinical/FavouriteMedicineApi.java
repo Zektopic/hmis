@@ -990,7 +990,7 @@ public class FavouriteMedicineApi {
         }
 
         if (template.getCreatedAt() != null) {
-            map.put("createdAt", gson.toJson(template.getCreatedAt()));
+            map.put("createdAt", template.getCreatedAt());
         }
 
         return map;

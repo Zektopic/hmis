@@ -153,7 +153,17 @@
                                     <p:outputLabel value="#{fm.patient.person.phone}" rendered="#{not empty fm.patient.person.phone}" class="mx-1" />
                                 </p:column>
                                 <p:column headerText="Relation to CHH">
-                                    <p:outputLabel value="#{fm.relationToChh.name}" ></p:outputLabel>
+                                    <p:selectOneMenu
+                                        value="#{fm.relationToChh}"
+                                        class="w-100">
+                                        <f:selectItem itemLabel="Select Relationship" itemValue="#{null}" noSelectionOption="true" />
+                                        <f:selectItems value="#{relationController.getItemsIncluding(fm.relationToChh)}" var="r"
+                                                       itemLabel="#{r.name}" itemValue="#{r}" ></f:selectItems>
+                                        <p:ajax
+                                            process="@this"
+                                            update="@this :growl"
+                                            listener="#{patientController.updateFamilyMemberRelation(fm)}" ></p:ajax>
+                                    </p:selectOneMenu>
                                 </p:column>
                                 <p:column headerText="Membership" rendered="false">
                                     <p:outputLabel value="#{fm.family.membershipScheme.name}" ></p:outputLabel>
@@ -210,7 +220,16 @@
                                     <p:commandButton 
                                         ajax="false" 
                                         value="Profile"
-                                        rendered="#{webUserController.hasPrivilege('MemberShipAdd')}"
+                                        rendered="#{webUserController.hasPrivilege('MemberShipAdd') and (webUserController.hasPrivilege('OpdBilling') or webUserController.hasPrivilege('LabCashier'))}"
+                                        action="#{patientController.navigateToOpdPatientProfile()}"
+                                        class="ui-button-warning mx-1" 
+                                        icon="pi pi-user">
+                                        <f:setPropertyActionListener value="#{fm.patient}" target="#{patientController.current}"></f:setPropertyActionListener>
+                                    </p:commandButton>
+                                    <p:commandButton 
+                                        ajax="false" 
+                                        value="Profile"
+                                        rendered="#{webUserController.hasPrivilege('MemberShipAdd') and !(webUserController.hasPrivilege('OpdBilling') or webUserController.hasPrivilege('LabCashier'))}"
                                         action="#{patientController.navigateToManageIndividualMembership()}"
                                         class="ui-button-warning mx-1" 
                                         icon="pi pi-user">
@@ -220,12 +239,20 @@
                                     <p:commandButton
                                         ajax="false"
                                         value="Edit"
-                                        action="patient" 
-                                        rendered="#{webUserController.hasPrivilege('MemberShipAdd')}"
+                                        action="#{patientController.navigateToOpdPatientEdit()}"
+                                        rendered="#{webUserController.hasPrivilege('MemberShipAdd') and webUserController.hasPrivilege('LabEditPatient')}"
                                         class="ui-button-warning mx-1" icon="fa-solid fa-pen">
                                         <f:setPropertyActionListener value="#{fm.patient}" target="#{patientController.current}" ></f:setPropertyActionListener>
                                     </p:commandButton>
-                                    
+                                    <p:commandButton
+                                        ajax="false"
+                                        value="Edit"
+                                        action="patient"
+                                        rendered="#{webUserController.hasPrivilege('MemberShipAdd') and !webUserController.hasPrivilege('LabEditPatient')}"
+                                        class="ui-button-warning mx-1" icon="fa-solid fa-pen">
+                                        <f:setPropertyActionListener value="#{fm.patient}" target="#{patientController.current}" ></f:setPropertyActionListener>
+                                    </p:commandButton>
+
                                     <p:commandButton 
                                         rendered="#{webUserController.hasPrivilege('MemberShipAdd')}"
                                         ajax="false" value="Remove" 

@@ -50,7 +50,8 @@ numbers, entity IDs), affected-record counts, production schema names, cutover
 dates, per-staff statistics, data-fix logs or credentials. Describe the defect
 and the local test evidence; keep hospital-specific numbers in `tmp/`. This
 applies to the issue body as much as to the PR — including an issue *you* file
-mid-run for a bug you found yourself.
+mid-run for a bug you found yourself. Write each such text to a file and run
+the `hmis-public-guard` subagent on it; post only after a `PASS`.
 
 ## 1. Setup
 
@@ -219,7 +220,8 @@ Rules that hold on every machine:
 
 ## 7. Test with Playwright + verify in DB
 
-Run the `playwright-e2e` skill workflow:
+Run the `playwright-e2e` skill workflow, or dispatch the `hmis-qa-verifier`
+subagent with the acceptance checks (its `FAIL` sends you back to step 8):
 - Before scripting a page, grep `developer_docs/testing/playwright-e2e/` for
   its name (e.g. `grep -rn "Patient Admit"`) and read the matching §. Most
   selector, growl and test-data traps are already there.
@@ -379,6 +381,11 @@ Precondition: the step 7 end-to-end test (Playwright and/or API, with DB or API
 read-back) has passed against the rebuilt local deployment. Base is
 `development`, branched from `origin/development`.
 
+Before creating the PR (small fixes may skip this), dispatch `hmis-rules-reviewer`
+on the branch diff, plus `hmis-security-reviewer` when it touches auth, tokens,
+signed links, `ws/`, privileges or no-login pages, and `hmis-ux-reviewer`
+(non-blocking) when it has `.xhtml`. Fix confirmed findings first.
+
 Run `mkdir -p "tmp/<issue>"` first, then write the PR body with the Write tool
 to `tmp/<issue>/pr-body.md` and pass
 `--body-file`. Never build it in a shell heredoc: backticks in code spans
@@ -409,7 +416,15 @@ Repeat, up to **3 cycles**:
 
 1. `gh pr checks <PR#>` — if checks are still pending, `ScheduleWakeup` for
    ~270s and recheck (don't block with `--watch` past a few minutes).
-2. If checks fail: investigate the failure, fix, push, go to 1.
+   If CodeRabbit is the only check listed, run
+   `gh pr view <PR#> --json mergeStateStatus,baseRefName`: `DIRTY` means a
+   conflict kept the workflows from starting. Merge `origin/<baseRefName>`
+   (never `development` into a `-hotfix` PR), push, recheck. `UNKNOWN` means
+   GitHub is still computing it; recheck. `CLEAN` means path filters skipped
+   the workflows (e.g. a docs-only PR), so the checks are done.
+2. If checks fail: investigate the failure and fix it. Push once the CI
+   fixes and any pending review fixes are all in (see the CodeRabbit limit
+   below), then go to 1.
 3. Once checks pass: run the `review-pr` skill for `<PR#>`.
    - Auto-apply fixes for comments matching `review-pr`'s documented
      false-positive/valid-fix patterns.
@@ -420,6 +435,12 @@ Repeat, up to **3 cycles**:
      says "Review limit reached", it reviewed nothing: say so in
      Notify, and wait for the limit reset or ask the user before
      treating the PR as reviewed.
+   - Every push starts a CodeRabbit review, and its plan caps reviews per
+     time window. Batch fixes into as few pushes as possible. After
+     "Review limit reached", `ScheduleWakeup` for the minutes it states
+     (the wait doesn't count as a cycle), then comment
+     `@coderabbitai review`. If the wait is longer than about 30 minutes,
+     ask the user instead.
    - A Codex summary with status **Failed** plus a "You have reached
      your Codex usage limits" comment reviewed nothing, even though its
      hidden state says `has_unresolved_findings: true`. Treat it like

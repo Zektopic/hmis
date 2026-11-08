@@ -480,7 +480,10 @@ public class ChannelStaffPaymentBillController implements Serializable {
             hm.put("ss", getSelectedServiceSession());
         }
 
-        sql += " and b.bill.singleBillSession.completed=true";
+        if (configOptionApplicationController.getBooleanValueByKey("Only Show Completed Channel Bookings On Doctor Payments")) {
+            sql += " and b.bill.singleBillSession.completed=:com ";
+            hm.put("com", true);
+        }
 
 //        sql += " and b.bill.singleBillSession.absent=false "
 //                + " order by b.bill.singleBillSession.serviceSession.sessionDate,"
@@ -535,7 +538,12 @@ public class ChannelStaffPaymentBillController implements Serializable {
         m.put("class", BilledBill.class);
         List<BillFee> nonRefundableBillFees = new ArrayList<>();
         nonRefundableBillFees = billFeeFacade.findByJpql(sql, m, TemporalType.TIMESTAMP);
-        dueBillFees.addAll(nonRefundableBillFees);
+        // Without the completed-only filter the first query already returns absent bookings
+        for (BillFee bf : nonRefundableBillFees) {
+            if (!dueBillFees.contains(bf)) {
+                dueBillFees.add(bf);
+            }
+        }
 
         for (BillFee bf : dueBillFees) {
             bf.setPayingAmount(bf.getFeeValue() - bf.getPaidValue());
@@ -627,7 +635,12 @@ public class ChannelStaffPaymentBillController implements Serializable {
         m.put("ftp", FeeType.Staff);
         m.put("class", BilledBill.class);
         List<BillFee> nonRefundableBillFees = billFeeFacade.findByJpql(sql, m, TemporalType.TIMESTAMP);
-        dueBillFees.addAll(nonRefundableBillFees);
+        // Without the completed-only filter the first query already returns absent bookings
+        for (BillFee bf : nonRefundableBillFees) {
+            if (!dueBillFees.contains(bf)) {
+                dueBillFees.add(bf);
+            }
+        }
 
     }
 
@@ -756,6 +769,35 @@ public class ChannelStaffPaymentBillController implements Serializable {
                 totalDue = totalDue + f.getFeeValue() - f.getPaidValue();
             }
         }
+    }
+
+    /**
+     * Warning text naming the absent patients among the currently selected
+     * fees; empty when none. Used for a non-blocking confirmation (#25047).
+     */
+    public String getAbsentPatientsWarning() {
+        if (payingBillFees == null) {
+            return "";
+        }
+        List<String> names = new ArrayList<>();
+        for (BillFee bf : payingBillFees) {
+            if (bf == null || bf.getBill() == null) {
+                continue;
+            }
+            BillSession bs = bf.getBill().getSingleBillSession();
+            if (bs == null || !bs.isAbsent()) {
+                continue;
+            }
+            String name = "";
+            if (bf.getBill().getPatient() != null && bf.getBill().getPatient().getPerson() != null) {
+                name = bf.getBill().getPatient().getPerson().getNameWithTitle();
+            }
+            names.add((name == null ? "" : name) + " (Appointment No " + bs.getSerialNo() + ")");
+        }
+        if (names.isEmpty()) {
+            return "";
+        }
+        return "Marked as absent: " + String.join(", ", names) + ". Are you sure you want to proceed with the payment?";
     }
 
     public void performCalculations() {

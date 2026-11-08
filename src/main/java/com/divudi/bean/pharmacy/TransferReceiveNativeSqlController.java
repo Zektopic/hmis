@@ -40,6 +40,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.persistence.TemporalType;
@@ -76,6 +77,9 @@ public class TransferReceiveNativeSqlController implements Serializable {
     private Date fromDate;
     private Date toDate;
     private TransferReceiveItemRowDto selectedItemRow;
+    // Re-entrancy guard for settle()/settleApprove(): a double submit of the
+    // non-AJAX Receive button must not persist two receive bills (#24788)
+    private final AtomicBoolean settling = new AtomicBoolean(false);
 
     // ---- Injected ----
     @Inject
@@ -394,7 +398,23 @@ public class TransferReceiveNativeSqlController implements Serializable {
      * Mirrors TransferReceiveController.settle().
      */
     public void settle() {
+        if (!settling.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            doSettle();
+        } finally {
+            settling.set(false);
+        }
+    }
+
+    private void doSettle() {
         if (!isAuthorized("FINALIZE", "PharmacyReceiveFinalize")) {
+            return;
+        }
+        // Already settled by an earlier request of this session (#24788)
+        if (printPreview) {
+            JsfUtil.addErrorMessage("This receive has already been saved. Please go back to the list.");
             return;
         }
         if (itemRowList == null || itemRowList.isEmpty()) {
@@ -422,6 +442,9 @@ public class TransferReceiveNativeSqlController implements Serializable {
             return;
         }
 
+        // Rows with a receiving quantity of 0 or less are skipped by the service; tell the user (#18601)
+        List<String> skippedRows = collectSkippedRowLabels();
+
         Bill bill = buildReceiveBillHeader(BillTypeAtomic.PHARMACY_RECEIVE);
         applyBillNumbers(bill);
 
@@ -439,6 +462,35 @@ public class TransferReceiveNativeSqlController implements Serializable {
         receivedBillId = bill.getId();
         enrichPrintDto(printDto, bill);
         printPreview = true;
+        warnSkippedRows(skippedRows);
+    }
+
+    /**
+     * Labels (item name, code, batch) of rows the service will not receive because
+     * the receiving quantity is blank, zero or negative (#18601, #25113).
+     */
+    private List<String> collectSkippedRowLabels() {
+        List<String> skippedRows = new ArrayList<>();
+        if (itemRowList == null) {
+            return skippedRows;
+        }
+        for (TransferReceiveItemRowDto row : itemRowList) {
+            if (row.getReceivingQty() == null || row.getReceivingQty().signum() <= 0) {
+                String code = row.getItemCode();
+                String batch = row.getBatchNo();
+                skippedRows.add(row.getItemName()
+                        + (code != null && !code.trim().isEmpty() ? " (" + code + ")" : "")
+                        + (batch != null && !batch.trim().isEmpty() ? " batch " + batch : ""));
+            }
+        }
+        return skippedRows;
+    }
+
+    private void warnSkippedRows(List<String> skippedRows) {
+        if (skippedRows != null && !skippedRows.isEmpty()) {
+            JsfUtil.addWarningMessage(skippedRows.size() + " row(s) with a blank receiving quantity or a quantity of 0 or less were skipped and not received: "
+                    + String.join(", ", skippedRows));
+        }
     }
 
     /**
@@ -446,7 +498,23 @@ public class TransferReceiveNativeSqlController implements Serializable {
      * Mirrors TransferReceiveController.settleApprove().
      */
     public void settleApprove() {
+        if (!settling.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            doSettleApprove();
+        } finally {
+            settling.set(false);
+        }
+    }
+
+    private void doSettleApprove() {
         if (!isAuthorized("APPROVE", "PharmacyReceiveApprove")) {
+            return;
+        }
+        // Already approved by an earlier request of this session (#24788)
+        if (printPreview) {
+            JsfUtil.addErrorMessage("This receive has already been approved. Please go back to the list.");
             return;
         }
         if (receivedBillId == null) {
@@ -473,6 +541,8 @@ public class TransferReceiveNativeSqlController implements Serializable {
             }
             return;
         }
+
+        List<String> skippedRows = collectSkippedRowLabels();
 
         long preBillId = receivedBillId; // capture before overwrite
         Bill bill = buildReceiveBillHeader(BillTypeAtomic.PHARMACY_RECEIVE);
@@ -504,6 +574,7 @@ public class TransferReceiveNativeSqlController implements Serializable {
         receivedBillId = bill.getId();
         enrichPrintDto(printDto, bill);
         printPreview = true;
+        warnSkippedRows(skippedRows);
     }
 
     /**
@@ -579,6 +650,7 @@ public class TransferReceiveNativeSqlController implements Serializable {
         printPreview = true;
 
         JsfUtil.addSuccessMessage("Request Finalized Successfully");
+        warnSkippedRows(collectSkippedRowLabels());
     }
 
     private void fillPrintItemsFromRows(TransferReceivePrintDto dto) {

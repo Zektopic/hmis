@@ -673,7 +673,7 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             if (hmacKey == null || hmacKey.trim().isEmpty()) {
                 return;
             }
-            long[] decoded = securityController.decodeBillToken(encryptedPatientReportId, hmacKey);
+            long[] decoded = securityController.decodeBillToken(SecurityController.LINK_BILL, encryptedPatientReportId, hmacKey);
             if (decoded == null) {
                 return;
             }
@@ -682,6 +682,10 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
             }
             bill = getBillFacade().find(decoded[0]);
         }
+        // Legacy jasypt-encrypted links (fixed public key, issue #19863) are no
+        // longer accepted; their 1-month TTL lapsed after 2026-07-09 and the key
+        // is public in the repository. A non-HMAC token now resolves to no bill
+        // (see #25249).
     }
 
     public void fillBillTypeSummery() {
@@ -2986,7 +2990,8 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
         // double-deduct from the drawer balance. See issue #19796.
         JsfUtil.addSuccessMessage("Cancelled");
 
-        if (cancellationBill.getPaymentMethod() == PaymentMethod.Credit) {
+        if (cancellationBill.getPaymentMethod() == PaymentMethod.Credit
+                || cancellationBill.getPaymentMethod() == PaymentMethod.Staff) { // Staff credit too (#25339)
             //TODO: Manage Credit Balances for Company, Staff
             if (cancellationBill.getToStaff() != null) {
                 staffBean.updateStaffCredit(cancellationBill.getToStaff(), 0 - (getBill().getNetTotal() + getBill().getVat()));
@@ -5344,6 +5349,13 @@ public class BillSearch implements Serializable, ControllerWithMultiplePayments 
                 // reprint page is a reasonable, functioning view.
                 inwardSearch.setBill(bill);
                 return "/inward/inward_reprint_bill_payment?faces-redirect=true";
+
+            case IOU_SETTLE:
+                // A Return on an IOU writes a RefundBill of this type: it is not a settlement
+                if (bill instanceof RefundBill) {
+                    return "";
+                }
+                return "/cashier/iou_settle_bill_reprint?faces-redirect=true";
 
             case INWARD_APPOINTMENT_BILL:
             case INWARD_APPOINTMENT_CANCEL_BILL:

@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -152,6 +153,7 @@ public class PharmacyStockTakeController implements Serializable {
     private com.divudi.core.entity.Category selectedCategory; // for category-specific downloads
     private com.divudi.core.entity.Category selectedDosageForm; // for dosage-form-specific downloads
     private com.divudi.core.data.DepartmentType selectedDepartmentType; // for department-type-specific downloads
+    private SnapshotSortOrder snapshotSortOrder = SnapshotSortOrder.CATEGORY_ITEM_EXPIRY; // shared by the table and all sheet downloads
     // Pending physical count bills
     private List<com.divudi.core.light.common.PharmacyPhysicalCountLight> pendingPhysicalCounts;
 
@@ -588,6 +590,8 @@ public class PharmacyStockTakeController implements Serializable {
             return null;
         }
         Department dept = snapshotBill.getDepartment();
+        // Capture before the in-memory item list is cleared after the batch persist
+        Long settledItemsCount = (long) snapshotBill.getBillItems().size();
         if (snapshotBill.getId() == null) {
             String deptId = billNumberBean.departmentBillNumberGenerator(dept, BillType.PharmacySnapshotBill, BillClassType.BilledBill, BillNumberSuffix.NONE);
             snapshotBill.setInsId(deptId);
@@ -620,10 +624,11 @@ public class PharmacyStockTakeController implements Serializable {
                 snapshotBill.getCreatedAt(),
                 snapshotBill.getInstitution() != null ? snapshotBill.getInstitution().getName() : null,
                 snapshotBill.getDepartment() != null ? snapshotBill.getDepartment().getName() : null,
-                0L,
+                settledItemsCount,
                 snapshotBill.getNetTotal(),
                 Boolean.FALSE
         );
+        snapshotBillDisplay.setDepartmentType(snapshotBill.getDepartmentType());
         return "/pharmacy/pharmacy_stock_take_print?faces-redirect=true&billId=" + snapshotBill.getId();
     }
 
@@ -1125,7 +1130,7 @@ public class PharmacyStockTakeController implements Serializable {
                 BillItem bi = new BillItem();
                 bi.setBill(physicalCountBill);
                 bi.setItem(snapItem.getItem());
-                bi.setQty(physical);
+                bi.setQty(roundQty(physical));
                 bi.setCreatedAt(new Date());
                 bi.setCreater(sessionController.getLoggedUser());
                 bi.setReferanceBillItem(snapItem);
@@ -1135,7 +1140,7 @@ public class PharmacyStockTakeController implements Serializable {
                 Stock currentStock = (snapPbi != null) ? snapPbi.getStock() : null;
                 double currentStockQty = (currentStock != null && currentStock.getStock() != null)
                         ? currentStock.getStock() : snapItem.getQty();
-                bi.setAdjustedValue(physical - currentStockQty);
+                bi.setAdjustedValue(roundQty(physical - currentStockQty));
 
                 PharmaceuticalBillItem pbi = new PharmaceuticalBillItem();
                 pbi.setBillItem(bi);
@@ -1143,7 +1148,7 @@ public class PharmacyStockTakeController implements Serializable {
                     pbi.setItemBatch(snapPbi.getItemBatch());
                     pbi.setStock(currentStock); // Store stock reference for approval process
                 }
-                pbi.setQty(physical);
+                pbi.setQty(roundQty(physical));
                 bi.setPharmaceuticalBillItem(pbi);
                 physicalCountBill.getBillItems().add(bi);
             }
@@ -1232,7 +1237,7 @@ public class PharmacyStockTakeController implements Serializable {
             return null;
         }
 
-        if (snapshotBillDisplay.getCompleted()) {
+        if (Boolean.TRUE.equals(snapshotBillDisplay.getCompleted())) {
             JsfUtil.addErrorMessage("Cannot upload to a completed stock taking session");
             return null;
         }
@@ -1323,7 +1328,7 @@ public class PharmacyStockTakeController implements Serializable {
                 BillItem bi = new BillItem();
                 bi.setBill(physicalCountBill);
                 bi.setItem(snapBillItem.getItem()); // Already loaded via JOIN FETCH
-                bi.setQty(physical);
+                bi.setQty(roundQty(physical));
                 bi.setCreatedAt(new Date());
                 bi.setCreater(sessionController.getLoggedUser());
                 bi.setReferanceBillItem(snapBillItem);
@@ -1332,7 +1337,7 @@ public class PharmacyStockTakeController implements Serializable {
                 Stock currentStock = (snapPbi != null) ? snapPbi.getStock() : null; // Already loaded
                 double currentStockQty = (currentStock != null && currentStock.getStock() != null)
                         ? currentStock.getStock() : snapBillItem.getQty();
-                bi.setAdjustedValue(physical - currentStockQty);
+                bi.setAdjustedValue(roundQty(physical - currentStockQty));
 
                 PharmaceuticalBillItem pbi = new PharmaceuticalBillItem();
                 pbi.setBillItem(bi);
@@ -1340,7 +1345,7 @@ public class PharmacyStockTakeController implements Serializable {
                     pbi.setItemBatch(snapPbi.getItemBatch()); // Already loaded
                     pbi.setStock(currentStock);
                 }
-                pbi.setQty(physical);
+                pbi.setQty(roundQty(physical));
                 bi.setPharmaceuticalBillItem(pbi);
 
                 batchItems.add(bi);
@@ -1459,7 +1464,7 @@ public class PharmacyStockTakeController implements Serializable {
             JsfUtil.addErrorMessage("Please log to the department you want to upload the stock data");
             return null;
         }
-        if (snapshotBillDisplay.getCompleted()) {
+        if (Boolean.TRUE.equals(snapshotBillDisplay.getCompleted())) {
             JsfUtil.addErrorMessage("Cannot upload to a completed stock taking session");
             return null;
         }
@@ -1509,8 +1514,8 @@ public class PharmacyStockTakeController implements Serializable {
 
                     // Build BillItem in memory using JPA proxies — no DB load
                     BillItem bi = new BillItem();
-                    bi.setQty(physicalQty);
-                    bi.setAdjustedValue(physicalQty - snap.currentStockQty);
+                    bi.setQty(roundQty(physicalQty));
+                    bi.setAdjustedValue(roundQty(physicalQty - snap.currentStockQty));
                     bi.setItem(itemFacade.getReference(snap.itemId));
                     bi.setReferanceBillItem(billItemFacade.getReference(snapBillItemId));
 
@@ -1518,7 +1523,7 @@ public class PharmacyStockTakeController implements Serializable {
                     pbi.setBillItem(bi);
                     pbi.setItemBatch(itemBatchFacade.getReference(snap.itemBatchId));
                     pbi.setStock(snap.stockId != null ? stockFacade.getReference(snap.stockId) : null);
-                    pbi.setQty(physicalQty);
+                    pbi.setQty(roundQty(physicalQty));
                     bi.setPharmaceuticalBillItem(pbi);
 
                     billItems.add(bi);
@@ -1633,8 +1638,9 @@ public class PharmacyStockTakeController implements Serializable {
                     snapshotBillDisplay.getId(), snapshotBillDisplay.getDeptId(),
                     snapshotBillDisplay.getCreatedAt(),
                     snapshotBillDisplay.getInstitutionName(), snapshotBillDisplay.getDepartmentName(),
-                    (long) physicalCountBill.getBillItems().size(),
-                    snapshotBillDisplay.getNetTotal(), Boolean.FALSE);
+                    snapshotBillDisplay.getItemsCount(),
+                    snapshotBillDisplay.getNetTotal(), Boolean.FALSE,
+                    snapshotBillDisplay.getDepartmentType());
         }
 
         // doApprovalLogic() may have queued a warning that some lines were not applied
@@ -1777,8 +1783,8 @@ public class PharmacyStockTakeController implements Serializable {
             double current = stock.getStock() == null ? 0.0 : stock.getStock();
 
             BillItem bi = new BillItem();
-            bi.setQty(r.getQuantity());
-            bi.setAdjustedValue(r.getQuantity() - current);
+            bi.setQty(roundQty(r.getQuantity()));
+            bi.setAdjustedValue(roundQty(r.getQuantity() - current));
             bi.setItem(amp);
             bi.setDescreption("Added from stock-take upload (sheet row " + r.getRowNo() + ", not in snapshot)");
             bi.setBill(physicalCountBill);
@@ -1786,7 +1792,7 @@ public class PharmacyStockTakeController implements Serializable {
             pbi.setBillItem(bi);
             pbi.setItemBatch(batch);
             pbi.setStock(stock);
-            pbi.setQty(r.getQuantity());
+            pbi.setQty(roundQty(r.getQuantity()));
             bi.setPharmaceuticalBillItem(pbi);
             physicalCountBill.getBillItems().add(bi);
             it.remove();
@@ -2426,6 +2432,7 @@ public class PharmacyStockTakeController implements Serializable {
                 b.getNetTotal(),
                 b.isCompleted()
             );
+            snapshotBillDisplay.setDepartmentType(b.getDepartmentType());
         }
 
         // Keep existing behavior for backward compatibility
@@ -2567,10 +2574,10 @@ public class PharmacyStockTakeController implements Serializable {
             JsfUtil.addErrorMessage("No Bill ID");
             return null;
         }
-        // Use same 8-arg constructor as listSnapshotBillRows (proven to work), then patch departmentId
+        // Same constructor as the print page (includes departmentType), then patch departmentId
         String jpql = "select new com.divudi.core.light.common.PharmacySnapshotBillLight("
                 + "b.id, b.deptId, b.createdAt, ins.name, dept.name, "
-                + "0L, b.netTotal, b.completed) "
+                + "0L, b.netTotal, b.completed, b.departmentType) "
                 + "from Bill b left join b.institution ins left join b.department dept where b.id = :billId";
 
         HashMap<String, Object> params = new HashMap<>();
@@ -3453,6 +3460,7 @@ public class PharmacyStockTakeController implements Serializable {
                 dtos = new java.util.ArrayList<>(seen.values());
             }
 
+            sortSnapshotItems(dtos);
             snapshotItems = dtos;
             snapshotItemsLoadedForBillId = snapshotBill.getId();
             System.out.println("[LoadLazy] DONE. items=" + dtos.size()
@@ -3514,12 +3522,18 @@ public class PharmacyStockTakeController implements Serializable {
      */
     public int getSnapshotBillItemsCount() {
         // Use cached count from DTO first (no database hit)
-        if (snapshotBillDisplay != null && snapshotBillDisplay.getItemsCount() != null) {
+        if (snapshotBillDisplay != null && snapshotBillDisplay.getItemsCount() != null
+                && snapshotBillDisplay.getItemsCount() > 0L) {
             return snapshotBillDisplay.getItemsCount().intValue();
         }
 
-        // Fallback to DTO list size
-        return getSnapshotItems().size();
+        // Fallback to DTO list size (a zero cached count is not trusted)
+        List<com.divudi.core.data.dto.SnapshotBillItemDTO> items = getSnapshotItems();
+        int count = items != null ? items.size() : 0;
+        if (snapshotBillDisplay != null && count > 0) {
+            snapshotBillDisplay.setItemsCount((long) count);
+        }
+        return count;
     }
 
     public double getSnapshotRetailTotal() {
@@ -4097,6 +4111,15 @@ public class PharmacyStockTakeController implements Serializable {
         JsfUtil.addSuccessMessage("Physical count saved");
     }
 
+    /**
+     * Rounds a stock quantity to 4 decimals before it is stored or compared, so
+     * binary floating-point noise (0.008000000000000007) is not saved and does not
+     * make a line with no real change look like a variance.
+     */
+    private static double roundQty(double value) {
+        return com.divudi.core.util.CommonFunctions.round(value, 4);
+    }
+
     public void approvePhysicalCount() {
         if (physicalCountBill == null) {
             JsfUtil.addErrorMessage("No physical count available");
@@ -4119,7 +4142,7 @@ public class PharmacyStockTakeController implements Serializable {
         boolean hasVariance = false;
         if (physicalCountBill.getBillItems() != null && !physicalCountBill.getBillItems().isEmpty()) {
             for (BillItem bi : physicalCountBill.getBillItems()) {
-                if (bi.getAdjustedValue() != 0) {
+                if (roundQty(bi.getAdjustedValue()) != 0) {
                     hasVariance = true;
                     break;
                 }
@@ -4198,7 +4221,7 @@ public class PharmacyStockTakeController implements Serializable {
         int expectedLines = 0;
         int appliedLines = 0;
         for (BillItem bi : physicalCountBill.getBillItems()) {
-            double variance = bi.getAdjustedValue();
+            double variance = roundQty(bi.getAdjustedValue());
             if (variance == 0) continue;
             expectedLines++;
             BillItem abi = new BillItem();
@@ -4222,7 +4245,7 @@ public class PharmacyStockTakeController implements Serializable {
             apbi.setQty(variance);
             if (stock != null) {
                 double before = stock.getStock();
-                double target = bi.getQty();
+                double target = roundQty(bi.getQty());
                 apbi.setBeforeAdjustmentValue(before);
                 apbi.setAfterAdjustmentValue(target);
                 LOGGER.log(Level.INFO, "[StockTake] Setting target for adjustment: itemCode={0}, batch={1}, before={2}, physicalQty={3}, target={4}, variance={5}",
@@ -4438,6 +4461,85 @@ public class PharmacyStockTakeController implements Serializable {
 
     public void setSelectedDepartmentType(com.divudi.core.data.DepartmentType selectedDepartmentType) {
         this.selectedDepartmentType = selectedDepartmentType;
+    }
+
+    /**
+     * Row order for the stock count bill. One order is shared by the on-screen
+     * table, Print, Export PDF and every Guided/Blind sheet download, so the
+     * sheet the counters use matches what they see.
+     */
+    public enum SnapshotSortOrder {
+        CATEGORY_ITEM_EXPIRY("Category, Item, Expiry"),
+        ITEM_EXPIRY("Item, Expiry"),
+        DOSAGE_FORM_ITEM_EXPIRY("Dosage Form, Item, Expiry"),
+        EXPIRY_ITEM("Expiry Date (soonest first), Item"),
+        BILL_ITEM_ID("Bill Item ID");
+
+        private final String label;
+
+        SnapshotSortOrder(String label) {
+            this.label = label;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+    }
+
+    public SnapshotSortOrder[] getSnapshotSortOrders() {
+        return SnapshotSortOrder.values();
+    }
+
+    public SnapshotSortOrder getSnapshotSortOrder() {
+        return snapshotSortOrder;
+    }
+
+    public void setSnapshotSortOrder(SnapshotSortOrder snapshotSortOrder) {
+        this.snapshotSortOrder = snapshotSortOrder != null ? snapshotSortOrder : SnapshotSortOrder.CATEGORY_ITEM_EXPIRY;
+    }
+
+    /** Re-sorts the already-loaded rows in memory after the user changes the sort order. */
+    public void applySnapshotSortOrder() {
+        if (snapshotItems != null) {
+            sortSnapshotItems(snapshotItems);
+        }
+    }
+
+    private void sortSnapshotItems(List<com.divudi.core.data.dto.SnapshotBillItemDTO> items) {
+        Comparator<String> text = Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER);
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> byCategory = Comparator.comparing(d -> blankToNull(d.getCategoryName()), text);
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> byDosageForm = Comparator.comparing(d -> blankToNull(d.getDosageForm()), text);
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> byItem = Comparator.comparing(d -> blankToNull(d.getItemName()), text);
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> byExpiry = Comparator.comparing(
+                com.divudi.core.data.dto.SnapshotBillItemDTO::getExpiryDate, Comparator.nullsLast(Comparator.naturalOrder()));
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> byBatch = Comparator.comparing(d -> blankToNull(d.getBatchNo()), text);
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> byId = Comparator.comparing(
+                com.divudi.core.data.dto.SnapshotBillItemDTO::getBillItemId, Comparator.nullsLast(Comparator.naturalOrder()));
+
+        Comparator<com.divudi.core.data.dto.SnapshotBillItemDTO> order;
+        switch (snapshotSortOrder != null ? snapshotSortOrder : SnapshotSortOrder.CATEGORY_ITEM_EXPIRY) {
+            case ITEM_EXPIRY:
+                order = byItem.thenComparing(byExpiry);
+                break;
+            case DOSAGE_FORM_ITEM_EXPIRY:
+                order = byDosageForm.thenComparing(byItem).thenComparing(byExpiry);
+                break;
+            case EXPIRY_ITEM:
+                order = byExpiry.thenComparing(byItem);
+                break;
+            case BILL_ITEM_ID:
+                order = byId;
+                break;
+            case CATEGORY_ITEM_EXPIRY:
+            default:
+                order = byCategory.thenComparing(byItem).thenComparing(byExpiry);
+                break;
+        }
+        items.sort(order.thenComparing(byBatch).thenComparing(byId));
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.trim().isEmpty() ? null : s.trim();
     }
 
     public java.util.List<com.divudi.core.data.DepartmentType> getAvailableDepartmentTypes() {

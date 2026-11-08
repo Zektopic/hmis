@@ -1452,7 +1452,9 @@ public class PharmacySaleForCashierController implements Serializable, Controlle
         pat.getPerson().setCreater(getSessionController().getLoggedUser());
         pat.getPerson().setCreatedAt(new Date());
 
-        if (pat.getPerson().getId() == null) {
+        // Patient.person is cascade = ALL, so creating a new patient below also saves its person.
+        // Persisting the person separately here wrote a second, unreferenced PERSON row (#23900).
+        if (pat.getPerson().getId() == null && pat.getId() != null) {
             getPersonFacade().create(pat.getPerson());
         }
         if (pat.getId() == null) {
@@ -2976,6 +2978,10 @@ public class PharmacySaleForCashierController implements Serializable, Controlle
 //        getPreBill().setMembershipScheme(membershipSchemeController.fetchPatientMembershipScheme(pt, getSessionController().getApplicationPreference().isMembershipExpires()));
         getPreBill().setToStaff(toStaff);
         getPreBill().setToInstitution(toInstitution);
+        // Credit sale: the credit company is the counterparty; record it in creditCompany too,
+        // as the native page does, so the bill reaches credit-company debtor reports (#22462).
+        // Set on every save, including null, so a retried PreBill never keeps an earlier company.
+        getPreBill().setCreditCompany(getPaymentMethod() == PaymentMethod.Credit ? toInstitution : null);
 
         getPreBill().setComments(comment);
 
@@ -3582,7 +3588,29 @@ public class PharmacySaleForCashierController implements Serializable, Controlle
         setToken(currentToken);
     }
 
-    public String settlePreBillAndNavigateToPrint() {
+    /**
+     * Guarded entry point (#21153): a double-submit must never run the settle
+     * twice or create an empty PreBill. The flag is reset in finally so every
+     * early return of the internal method releases it.
+     */
+    public synchronized String settlePreBillAndNavigateToPrint() {
+        if (billSettlingStarted) {
+            JsfUtil.addErrorMessage("Settlement is already in progress. Please wait.");
+            return null;
+        }
+        if (getPreBill() == null || getPreBill().getBillItems() == null || getPreBill().getBillItems().isEmpty()) {
+            JsfUtil.addErrorMessage("No Items added to bill to sale");
+            return null;
+        }
+        billSettlingStarted = true;
+        try {
+            return settlePreBillAndNavigateToPrintInternal();
+        } finally {
+            billSettlingStarted = false;
+        }
+    }
+
+    private String settlePreBillAndNavigateToPrintInternal() {
         editingQty = null;
         if (getSessionController().getLoggedUser() == null) {
             billSettlingStarted = false;
@@ -5105,6 +5133,9 @@ public class PharmacySaleForCashierController implements Serializable, Controlle
 
     @Deprecated // Use listnerForPaymentMethodChange
     public void changeListener() {
+        if (paymentMethod != PaymentMethod.Credit) {
+            toInstitution = null; // credit company applies to Credit only (#22462)
+        }
         if (paymentMethod == PaymentMethod.PatientDeposit) {
             getPaymentMethodData().getPatient_deposit().setPatient(patient);
         }

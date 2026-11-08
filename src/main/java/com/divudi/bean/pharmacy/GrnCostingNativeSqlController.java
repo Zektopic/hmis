@@ -41,6 +41,7 @@ import com.divudi.core.util.BigDecimalUtil;
 import com.divudi.core.util.CommonFunctions;
 import com.divudi.core.util.JsfUtil;
 import com.divudi.ejb.BillNumberGenerator;
+import com.divudi.service.pharmacy.GrnApprovalException;
 import com.divudi.service.pharmacy.GrnApprovingNativeSqlService;
 import com.divudi.service.pharmacy.GrnCostingNativeSqlService;
 import java.io.Serializable;
@@ -215,6 +216,11 @@ public class GrnCostingNativeSqlController implements Serializable {
         metadata.addConfigOption(new ConfigOptionInfo(
                 "Show Profit Percentage in GRN",
                 "Shows or hides the computed profit-margin percentage column on the GRN costing page",
+                OptionScope.APPLICATION
+        ));
+        metadata.addConfigOption(new ConfigOptionInfo(
+                "GRN - Highlight Rows With Expiry Date and Batch No Entered",
+                "Highlights GRN item rows in green once both Date of Expiry and Batch No are entered (low-profit-margin rows keep their red warning)",
                 OptionScope.APPLICATION
         ));
         metadata.addConfigOption(new ConfigOptionInfo(
@@ -642,6 +648,28 @@ public class GrnCostingNativeSqlController implements Serializable {
 
         printPreview = true;
         JsfUtil.addSuccessMessage("GRN Finalized");
+        warnFreeOnlyLinesWithoutPurchaseRate();
+    }
+
+    /**
+     * Reminds the user about free-only lines with no purchase rate. Their free
+     * value is zero. This is a prompt only: a rate cannot be enforced (#24932).
+     */
+    private void warnFreeOnlyLinesWithoutPurchaseRate() {
+        List<String> itemNames = new ArrayList<>();
+        for (BillItem bi : getBillItems()) {
+            BillItemFinanceDetails f = bi.getBillItemFinanceDetails();
+            if (f != null && bi.getItem() != null
+                    && !BigDecimalUtil.isPositive(f.getQuantity())
+                    && BigDecimalUtil.isPositive(f.getFreeQuantity())
+                    && !BigDecimalUtil.isPositive(f.getLineGrossRate())) {
+                itemNames.add(bi.getItem().getName());
+            }
+        }
+        if (!itemNames.isEmpty()) {
+            JsfUtil.addWarningMessage("No purchase rate on free-only items: " + String.join(", ", itemNames)
+                    + ". Their free value will be zero. Enter a purchase rate if you know it.");
+        }
     }
 
     // synchronized: the Approve button has only a confirm() dialog, no double-click guard.
@@ -779,7 +807,7 @@ public class GrnCostingNativeSqlController implements Serializable {
         // Javadoc for why this must be one EJB call rather than a per-item loop here.
         try {
             grnApprovingNativeSqlService.approveGrn(request);
-        } catch (IllegalStateException ex) {
+        } catch (GrnApprovalException | IllegalStateException ex) {
             // Last-resort race guard inside approveGrn() itself -- the
             // billTypeAtomic==PHARMACY_GRN check above already blocks the
             // normal double-click case, this only fires for a genuine
@@ -1880,6 +1908,13 @@ public class GrnCostingNativeSqlController implements Serializable {
         }
 
         if (BigDecimalUtil.isNullOrZero(totalBasis)) {
+            // Nothing to distribute on a bill of free-only lines. Clear any cost left from
+            // when a line still had a paid quantity, or it would reach the batch (#24932).
+            for (BillItem bi : billItems) {
+                if (bi.getBillItemFinanceDetails() != null) {
+                    bi.getBillItemFinanceDetails().setTotalCostRate(BigDecimal.ZERO);
+                }
+            }
             return;
         }
 
@@ -1984,7 +2019,7 @@ public class GrnCostingNativeSqlController implements Serializable {
             if (f.getLineNetRate() == null || f.getLineNetRate().compareTo(BigDecimal.ZERO) == 0) {
                 BigDecimal lineNetRate = quantity.compareTo(BigDecimal.ZERO) > 0
                         ? lineNetTotal.divide(quantity, 4, RoundingMode.HALF_UP)
-                        : BigDecimal.ZERO;
+                        : lineGrossRate.subtract(BigDecimalUtil.valueOrZero(f.getLineDiscountRate()));
                 f.setLineNetRate(lineNetRate);
             }
 
@@ -2090,9 +2125,11 @@ public class GrnCostingNativeSqlController implements Serializable {
         BigDecimal lineGrossTotal = lineGrossRate.multiply(qty);
         BigDecimal lineDiscountValue = lineDiscountRate.multiply(qty);
         BigDecimal lineNetTotal = lineGrossTotal.subtract(lineDiscountValue);
+        // A free-only line (qty 0) keeps its entered rate, as Direct Purchase does. Its line
+        // totals stay 0, so bill totals and cost are unaffected (#24932).
         BigDecimal lineNetRate = BigDecimalUtil.isPositive(qty)
                 ? lineNetTotal.divide(qty, 4, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO;
+                : lineGrossRate.subtract(lineDiscountRate);
 
         Item item = billItemFinanceDetails.getBillItem().getItem();
         BigDecimal totalQty = qty.add(freeQty);
@@ -2155,11 +2192,7 @@ public class GrnCostingNativeSqlController implements Serializable {
 
         billItemFinanceDetails.setCostRate(lineCostRate.multiply(unitsPerPack));
 
-        billItemFinanceDetails.setPurchaseRate(
-                BigDecimalUtil.isPositive(qty)
-                ? lineNetTotal.divide(qty, 4, RoundingMode.HALF_UP)
-                : BigDecimal.ZERO
-        );
+        billItemFinanceDetails.setPurchaseRate(lineNetRate);
 
         billItemFinanceDetails.setValueAtCostRate(
                 lineCostRate.multiply(totalQtyInUnits)

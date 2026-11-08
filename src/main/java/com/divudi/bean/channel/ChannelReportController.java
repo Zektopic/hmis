@@ -526,8 +526,8 @@ public class ChannelReportController implements Serializable {
         Map params = new HashMap<>();
         params.put("ret", false);
         params.put("bta", BillTypeAtomic.FUND_SHIFT_START_BILL);
-        params.put("fd", fromDate);
-        params.put("td", toDate);
+        params.put("fd", getFromDate());
+        params.put("td", getToDate());
 
         if(webUser != null){
              jpql += " and b.creater = :webUser";
@@ -570,7 +570,7 @@ public class ChannelReportController implements Serializable {
             return;
         }
 
-        cardPaymentDetails = channelService.fetchCardPaymentDetailsForChannelIncome(fromDate, toDate, institution, reportStatus);
+        cardPaymentDetails = channelService.fetchCardPaymentDetailsForChannelIncome(getFromDate(), getToDate(), institution, reportStatus);
 
         cardIncomeReportSC = getFiltersForChannelIncomeDailySummaryReport();
     }
@@ -626,7 +626,7 @@ public class ChannelReportController implements Serializable {
             return;
         }
 
-        ReportTemplateRowBundle bundle = channelService.generateChannelIncomeSummeryForSessions(fromDate, toDate, institution, null, null, "Scanning", reportStatus);
+        ReportTemplateRowBundle bundle = channelService.generateChannelIncomeSummeryForSessions(getFromDate(), getToDate(), institution, null, null, "Scanning", reportStatus);
         dataBundle = bundle;
 
     }
@@ -1505,12 +1505,7 @@ public class ChannelReportController implements Serializable {
     }
 
     public void fetchChannelIncomeSummeryByUserWise() {
-        if (fromDate == null || toDate == null) {
-            JsfUtil.addErrorMessage("Date range is not selected.");
-            return;
-        }
-
-        if (fromDate.after(toDate)) {
+        if (getFromDate().after(getToDate())) {
             JsfUtil.addErrorMessage("From date should be before to toDate.");
             return;
         }
@@ -1519,7 +1514,7 @@ public class ChannelReportController implements Serializable {
             return;
         }
 
-        wrapperDto = channelService.fetchChannelIncomeByUser(fromDate, toDate, institution, webUser, categoryList, reportStatus, reportStatus, paymentMethods);
+        wrapperDto = channelService.fetchChannelIncomeByUser(getFromDate(), getToDate(), institution, webUser, categoryList, reportStatus, reportStatus, paymentMethods);
 
         if (wrapperDto == null) {
             return;
@@ -1543,7 +1538,7 @@ public class ChannelReportController implements Serializable {
             return;
         }
 
-        ReportTemplateRowBundle bundle = channelService.generateChannelIncomeSummeryForSessions(fromDate, toDate, institution, null, null, "Agent", reportStatus);
+        ReportTemplateRowBundle bundle = channelService.generateChannelIncomeSummeryForSessions(getFromDate(), getToDate(), institution, null, null, "Agent", reportStatus);
         dataBundle = bundle;
     }
 
@@ -1569,8 +1564,8 @@ public class ChannelReportController implements Serializable {
                 + "AND s.originatingSession.retired = false "
                 + "AND s.sessionDate BETWEEN :fromDate AND :toDate";
 
-        m.put("fromDate", fromDate);
-        m.put("toDate", toDate);
+        m.put("fromDate", getFromDate());
+        m.put("toDate", getToDate());
 
         if (speciality != null) {
             m.put("sp", speciality);
@@ -1626,8 +1621,8 @@ public class ChannelReportController implements Serializable {
         bts.add(BillType.ChannelCash);
         bts.add(BillType.ChannelPaid);
 
-        m.put("fd", fromDate);
-        m.put("td", toDate);
+        m.put("fd", getFromDate());
+        m.put("td", getToDate());
         m.put("bts", bts);
 
         ////System.out.println("j = " + j);
@@ -1731,7 +1726,8 @@ public class ChannelReportController implements Serializable {
         String sql = "SELECT b FROM BillSession b "
                 + "  where type(b.bill)=:class "
                 + " and b.bill.billType in :bt "
-                + " and b.bill.retired=false ";
+                + " and b.bill.retired=false "
+                + " and (b.bill.billTypeAtomic is null or b.bill.billTypeAtomic != :bta) ";
 
         if (reportKeyWord.getSpeciality() != null) {
             sql += " and b.staff.speciality=:sp";
@@ -1787,6 +1783,7 @@ public class ChannelReportController implements Serializable {
 
         }
         hm.put("bt", bts);
+        hm.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hm.put("frm", getFromDate());
         hm.put("to", getToDate());
         hm.put("class", bill.getClass());
@@ -1803,7 +1800,8 @@ public class ChannelReportController implements Serializable {
                 + " FROM BillSession b "
                 + "  where type(b.bill)=:class "
                 + " and b.bill.billType in :bt "
-                + " and b.bill.retired=false ";
+                + " and b.bill.retired=false "
+                + " and (b.bill.billTypeAtomic is null or b.bill.billTypeAtomic != :bta) ";
 
         if (reportKeyWord.getSpeciality() != null) {
             sql += " and b.staff.speciality=:sp ";
@@ -1863,6 +1861,7 @@ public class ChannelReportController implements Serializable {
                 + " order by b.bill.billType ";
 
         hm.put("bt", bts);
+        hm.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hm.put("frm", getFromDate());
         hm.put("to", getToDate());
         hm.put("class", bill.getClass());
@@ -2050,7 +2049,8 @@ public class ChannelReportController implements Serializable {
         String sql = "SELECT sum(b.bill.netTotal) FROM BillSession b "
                 + "  where type(b.bill)=:class "
                 + " and b.bill.billType in :bt "
-                + " and b.bill.retired=false ";
+                + " and b.bill.retired=false "
+                + " and (b.bill.billTypeAtomic is null or b.bill.billTypeAtomic != :bta) ";
 
         if (reportKeyWord.getSpeciality() != null) {
             sql += " and b.staff.speciality=:sp";
@@ -2106,6 +2106,7 @@ public class ChannelReportController implements Serializable {
 
         }
         hm.put("bt", bts);
+        hm.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hm.put("frm", getFromDate());
         hm.put("to", getToDate());
         hm.put("class", bill.getClass());
@@ -2279,10 +2280,12 @@ public class ChannelReportController implements Serializable {
                 + " where b.billType in :bt "
                 + " and b.retired=false "
                 + " and type(b)=:class "
+                + " and (b.billTypeAtomic is null or b.billTypeAtomic != :bta) "
                 + " and b.createdAt between :fDate and :tDate "
                 + " order by b.singleBillSession.sessionDate ";
 
         hm.put("bt", bts);
+        hm.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hm.put("class", bill.getClass());
         hm.put("fDate", getFromDate());
         hm.put("tDate", getToDate());
@@ -2412,11 +2415,13 @@ public class ChannelReportController implements Serializable {
         String sql = " select b from Bill b "
                 + " where b.billType in :bt "
                 + " and b.retired=false "
+                + " and (b.billTypeAtomic is null or b.billTypeAtomic != :bta) "
                 + " and b.department=:dep "
                 + " and b.createdAt between :fDate and :tDate "
                 + " order by b.singleBillSession.sessionDate ";
 
         hm.put("bt", bts);
+        hm.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hm.put("dep", dep);
         hm.put("fDate", getFromDate());
         hm.put("tDate", getToDate());
@@ -3030,6 +3035,7 @@ public class ChannelReportController implements Serializable {
                 + " and bf.bill.singleBillSession.sessionDate between :fd and :td "
                 + " and bf.bill.billType in :bt "
                 + " and type(bf.bill)=:class "
+                + " and (bf.bill.billTypeAtomic is null or bf.bill.billTypeAtomic != :bta) "
                 + " and bf.fee.feeType in :ft ";
 
         if (getWebUser() != null) {
@@ -3044,6 +3050,7 @@ public class ChannelReportController implements Serializable {
         m.put("class", bill.getClass());
         m.put("ft", fts);
         m.put("bt", bts);
+        m.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
 
         billFeeList = getBillFeeFacade().findByJpql(sql, m, TemporalType.TIMESTAMP);
 
@@ -3104,6 +3111,7 @@ public class ChannelReportController implements Serializable {
                 + " and bf.bill.singleBillSession.sessionDate between :fd and :td "
                 + " and bf.bill.billType in :bt "
                 + " and type(bf.bill)=:class "
+                + " and (bf.bill.billTypeAtomic is null or bf.bill.billTypeAtomic != :bta) "
                 + " and bf.fee.feeType =:ft ";
 
         if (getWebUser() != null) {
@@ -3118,6 +3126,7 @@ public class ChannelReportController implements Serializable {
         m.put("class", bill.getClass());
         m.put("ft", feeType);
         m.put("bt", bts);
+        m.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
 
         billFeeList = getBillFeeFacade().findByJpql(sql, m, TemporalType.TIMESTAMP);
 
@@ -3134,6 +3143,7 @@ public class ChannelReportController implements Serializable {
                 + " bf.bill.retired=false "
                 + " and bf.bill.billType=:bt "
                 + " and type(bf.bill)=:class "
+                + " and (bf.bill.billTypeAtomic is null or bf.bill.billTypeAtomic != :bta) "
                 + " and bf.fee.feeType =:ft "
                 + " and bf.feeValue>0 ";
 
@@ -3150,8 +3160,10 @@ public class ChannelReportController implements Serializable {
         }
 
         if (paid) {
-            sql += " and bf.bill.paidBill is not null "
+            // A completed online booking has no paidBill link of its own; its pending bill carries it (#24927)
+            sql += " and (bf.bill.paidBill is not null or bf.bill.billTypeAtomic = :apiCompleted) "
                     + " and bf.bill.paidAmount!=0 ";
+            m.put("apiCompleted", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_COMPLETED_PAYMENT);
         }
         if (sessoinDate) {
             sql += " and bf.bill.singleBillSession.sessionDate between :fd and :td ";
@@ -3164,6 +3176,7 @@ public class ChannelReportController implements Serializable {
         m.put("class", BilledBill.class);
         m.put("ft", ft);
         m.put("bt", bt);
+        m.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
 //        m.put("fn", "Scan Fee");
 
         double d = getBillFeeFacade().findAggregateLong(sql, m, TemporalType.TIMESTAMP);
@@ -3180,6 +3193,7 @@ public class ChannelReportController implements Serializable {
                 + " bf.bill.retired=false "
                 + " and bf.bill.billType=:bt "
                 + " and type(bf.bill)=:class "
+                + " and (bf.bill.billTypeAtomic is null or bf.bill.billTypeAtomic != :bta) "
                 + " and bf.fee.feeType =:ft "
                 + " and bf.feeValue>0 ";
 
@@ -3191,8 +3205,10 @@ public class ChannelReportController implements Serializable {
         }
 
         if (paid) {
-            sql += " and bf.bill.paidBill is not null "
+            // A completed online booking has no paidBill link of its own; its pending bill carries it (#24927)
+            sql += " and (bf.bill.paidBill is not null or bf.bill.billTypeAtomic = :apiCompleted) "
                     + " and bf.bill.paidAmount!=0 ";
+            m.put("apiCompleted", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_COMPLETED_PAYMENT);
         }
         if (sessoinDate) {
             sql += " and bf.bill.singleBillSession.sessionDate between :fd and :td ";
@@ -3205,6 +3221,7 @@ public class ChannelReportController implements Serializable {
         m.put("class", BilledBill.class);
         m.put("ft", fts);
         m.put("bt", bt);
+        m.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
 //        m.put("fn", "Scan Fee");
 
         List<Bill> b = getBillFacade().findByJpql(sql, m, TemporalType.TIMESTAMP);
@@ -3272,7 +3289,8 @@ public class ChannelReportController implements Serializable {
         Map m = new HashMap();
 
         sql = " select count(distinct(bi.bill)) from BillItem  bi  "
-                + " where bi.retired=false ";
+                + " where bi.retired=false "
+                + " and (bi.bill.billTypeAtomic is null or bi.bill.billTypeAtomic != :bta) ";
 
         if (sessoinDate) {
             sql += " and bi.bill.singleBillSession.sessionDate between :fd and :td ";
@@ -3296,6 +3314,7 @@ public class ChannelReportController implements Serializable {
         }
 
         m.put("fd", getFromDate());
+        m.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         m.put("td", getToDate());
 
         double d = getBillFeeFacade().findAggregateLong(sql, m, TemporalType.TIMESTAMP);
@@ -3356,7 +3375,7 @@ public class ChannelReportController implements Serializable {
         if (staff != null) {
             staffs.add(staff);
         } else {
-            staffs.addAll(getChannelPaymentStaffbyClassType(bts, BillType.PaymentBill, fromDate, toDate));
+            staffs.addAll(getChannelPaymentStaffbyClassType(bts, BillType.PaymentBill, getFromDate(), getToDate()));
         }
 
         for (Staff stf : staffs) {
@@ -3365,9 +3384,9 @@ public class ChannelReportController implements Serializable {
             doctorPaymentSummeryRow.setConsultant(stf);
 
             if (bySession) {
-                doctorPaymentSummeryRow.setDoctorPaymentSummeryRowSubs(getDoctorPaymentSummeryRowSubsBySession(bts, BillType.ChannelProPayment, stf, fromDate, toDate));
+                doctorPaymentSummeryRow.setDoctorPaymentSummeryRowSubs(getDoctorPaymentSummeryRowSubsBySession(bts, BillType.ChannelProPayment, stf, getFromDate(), getToDate()));
             } else {
-                doctorPaymentSummeryRow.setDoctorPaymentSummeryRowSubs(getDoctorPaymentSummeryRowSubs(bts, BillType.ChannelProPayment, stf, fromDate, toDate));
+                doctorPaymentSummeryRow.setDoctorPaymentSummeryRowSubs(getDoctorPaymentSummeryRowSubs(bts, BillType.ChannelProPayment, stf, getFromDate(), getToDate()));
             }
             if (!doctorPaymentSummeryRow.getDoctorPaymentSummeryRowSubs().isEmpty()) {
                 doctorPaymentSummeryRows.add(doctorPaymentSummeryRow);
@@ -3388,7 +3407,7 @@ public class ChannelReportController implements Serializable {
         if (staff != null) {
             staffs.add(staff);
         } else {
-            staffs.addAll(getChannelPaymentStaffbyClassType(bts, BillType.PaymentBill, fromDate, toDate));
+            staffs.addAll(getChannelPaymentStaffbyClassType(bts, BillType.PaymentBill, getFromDate(), getToDate()));
         }
 
         for (Staff stf : staffs) {
@@ -3412,10 +3431,10 @@ public class ChannelReportController implements Serializable {
         List<ServiceSession> sessions = new ArrayList<>();
         double ptCount = 0;
 
-        for (ServiceSession ss : getServiceSessions(fromDate, toDate, staff)) {
+        for (ServiceSession ss : getServiceSessions(getFromDate(), getToDate(), staff)) {
             DoctorPaymentSummeryRowSub dpsrs = new DoctorPaymentSummeryRowSub();
             dpsrs.setServiceSession(ss);
-            dpsrs.setBills(getChannelPaymentBillListbyClassTypes(bts, bt, null, fromDate, toDate, staff, ss));
+            dpsrs.setBills(getChannelPaymentBillListbyClassTypes(bts, bt, null, getFromDate(), getToDate(), staff, ss));
 
             dpsrs.setStaffFeeTotal(getStaffFeeTotal(dpsrs.getBills()));
 
@@ -3544,11 +3563,11 @@ public class ChannelReportController implements Serializable {
         BillType[] billTypes = {BillType.ChannelCash, BillType.ChannelAgent, BillType.ChannelPaid};
         List<BillType> bts = Arrays.asList(billTypes);
 
-        Date nowDate = fromDate;
+        Date nowDate = getFromDate();
         Calendar cal = Calendar.getInstance();
         cal.setTime(nowDate);
 
-        while (nowDate.before(toDate)) {
+        while (nowDate.before(getToDate())) {
             DateFormat df = new SimpleDateFormat("dd-MMM-yyyy");
             String formattedDate = df.format(nowDate);
 
@@ -3578,7 +3597,7 @@ public class ChannelReportController implements Serializable {
         if (staff != null) {
             staffs.add(staff);
         } else {
-            staffs.addAll(getChannelUnPaidStaffbyClassType(bts, fromDate, toDate));
+            staffs.addAll(getChannelUnPaidStaffbyClassType(bts, getFromDate(), getToDate()));
         }
 
         for (Staff staff : staffs) {
@@ -3810,8 +3829,8 @@ public class ChannelReportController implements Serializable {
 
         sql += " order by b.insId ";
 
-        hm.put("fd", fromDate);
-        hm.put("td", toDate);
+        hm.put("fd", getFromDate());
+        hm.put("td", getToDate());
 
         List<Bill> b = getBillFacade().findByJpql(sql, hm, TemporalType.TIMESTAMP);
 
@@ -3842,6 +3861,7 @@ public class ChannelReportController implements Serializable {
                 + " else pe.name end, ''), "
                 + " coalesce(c.name, '-'), "
                 + " b.paymentMethod, "
+                + " b.staff.person.title, "
                 + " coalesce(b.staff.person.name, ''), "
                 + " coalesce(b.staffFee, 0.0), "
                 + " coalesce(b.hospitalFee, 0.0), "
@@ -3876,8 +3896,8 @@ public class ChannelReportController implements Serializable {
 
         params.put("onlineCompletedPayment", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_COMPLETED_PAYMENT);
         params.put("onlineCancellation", BillTypeAtomic.CHANNEL_CANCELLATION_WITH_PAYMENT_ONLINE_BOOKING);
-        params.put("fd", fromDate);
-        params.put("td", toDate);
+        params.put("fd", getFromDate());
+        params.put("td", getToDate());
         params.put("pmo", PaymentMethod.OnCall);
 
         if (staff != null) {
@@ -3962,8 +3982,8 @@ public class ChannelReportController implements Serializable {
 
         sql += " order by b.createdAt desc ";
 
-        hm.put("fd", fromDate);
-        hm.put("td", toDate);
+        hm.put("fd", getFromDate());
+        hm.put("td", getToDate());
 
         List<Bill> b = getBillFacade().findByJpql(sql, hm, TemporalType.TIMESTAMP);
         List<Bill> billList = new ArrayList<>();
@@ -4088,9 +4108,9 @@ public class ChannelReportController implements Serializable {
         BillType[] billTypes = {BillType.ChannelAgent, BillType.ChannelCash, BillType.ChannelPaid};
         List<BillType> bts = Arrays.asList(billTypes);
 
-        channelBills.addAll(channelBillListByBillType(createdDate, new BilledBill(), bts, fromDate, toDate));
-        channelBillsCancelled.addAll(channelBillListByBillType(createdDate, new CancelledBill(), bts, fromDate, toDate));
-        channelBillsRefunded.addAll(channelBillListByBillType(createdDate, new RefundBill(), bts, fromDate, toDate));
+        channelBills.addAll(channelBillListByBillType(createdDate, new BilledBill(), bts, getFromDate(), getToDate()));
+        channelBillsCancelled.addAll(channelBillListByBillType(createdDate, new CancelledBill(), bts, getFromDate(), getToDate()));
+        channelBillsRefunded.addAll(channelBillListByBillType(createdDate, new RefundBill(), bts, getFromDate(), getToDate()));
 
         doctorFeeBilledTotal = getStaffFeeTotal(channelBills);
         doctorFeeCancellededTotal = getStaffFeeTotal(channelBillsCancelled);
@@ -4167,7 +4187,7 @@ public class ChannelReportController implements Serializable {
         BillType[] billTypes = {BillType.ChannelCash, BillType.ChannelAgent, BillType.ChannelOnCall, BillType.ChannelStaff};
         List<BillType> bts = Arrays.asList(billTypes);
 
-        for (Staff s : getStaffbyClassType(bts, fromDate, toDate)) {
+        for (Staff s : getStaffbyClassType(bts, getFromDate(), getToDate())) {
 
             BookingCountSummryRow row = new BookingCountSummryRow();
             double[] arr = new double[4];
@@ -4365,6 +4385,7 @@ public class ChannelReportController implements Serializable {
                 + " and bf.bill.singleBillSession.sessionDate between :fd and :td "
                 + " and bf.bill.billType in :bt "
                 + " and type(bf.bill)=:class "
+                + " and (bf.bill.billTypeAtomic is null or bf.bill.billTypeAtomic != :bta) "
                 + " and bf.fee.feeType in :ft ";
 
         if (getWebUser() != null) {
@@ -4374,11 +4395,12 @@ public class ChannelReportController implements Serializable {
 
         sql += " order by bf.bill.insId ";
 
-        m.put("fd", fromDate);
-        m.put("td", toDate);
+        m.put("fd", getFromDate());
+        m.put("td", getToDate());
         m.put("class", bill.getClass());
         m.put("ft", fts);
         m.put("bt", bts);
+        m.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
 
         return getBillFeeFacade().findDoubleByJpql(sql, m, TemporalType.TIMESTAMP);
     }
@@ -4525,7 +4547,8 @@ public class ChannelReportController implements Serializable {
 
         String sql = " select b from Bill b "
                 + " where b.billType in :bt "
-                + " and b.retired=false ";
+                + " and b.retired=false "
+                + " and (b.billTypeAtomic is null or b.billTypeAtomic != :bta) ";
         if (createdDate) {
             sql += " and b.createdAt between :fDate and :tDate ";
         } else {
@@ -4534,6 +4557,7 @@ public class ChannelReportController implements Serializable {
         sql += " order by b.singleBillSession.sessionDate,b.singleBillSession.serviceSession.startingTime ";
 
         hm.put("bt", bts);
+        hm.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hm.put("fDate", getFromDate());
         hm.put("tDate", getToDate());
 
@@ -4606,8 +4630,8 @@ public class ChannelReportController implements Serializable {
                 + " and type(bf.bill)=:class "
                 + " and bf.fee.feeType=:ft ";
 
-        m.put("fd", fromDate);
-        m.put("td", toDate);
+        m.put("fd", getFromDate());
+        m.put("td", getToDate());
         m.put("class", bill.getClass());
         m.put("ft", feeType);
         m.put("bt", bt);
@@ -4726,17 +4750,22 @@ public class ChannelReportController implements Serializable {
                 + " where bs.retired=false "
                 + " and type(bs.bill)=:class "
                 + " and bs.bill.billType in :tbs "
+                + " and (bs.bill.billTypeAtomic is null or bs.bill.billTypeAtomic != :bta) "
                 + " and bs.sessionInstance=:si"
                 + " order by bs.serialNo";
         HashMap hh = new HashMap();
         hh.put("class", BilledBill.class);
         hh.put("si", sessionInstance);
+        hh.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
 
         List<BillType> bts = new ArrayList<>();
         bts.add(BillType.ChannelAgent);
         bts.add(BillType.ChannelCash);
         bts.add(BillType.ChannelOnCall);
         bts.add(BillType.ChannelStaff);
+        bts.add(BillType.ChannelCredit);
+        bts.add(BillType.ChannelResheduleWithPayment);
+        bts.add(BillType.ChannelResheduleWithOutPayment);
         hh.put("tbs", bts);
         nurseViewSessions = getBillSessionFacade().findByJpql(sql, hh, TemporalType.TIMESTAMP);
 
@@ -4749,12 +4778,14 @@ public class ChannelReportController implements Serializable {
                     + " From BillSession bs "
                     + " where bs.retired=false "
                     + " and bs.bill.billType in :tbs "
+                    + " and (bs.bill.billTypeAtomic is null or bs.bill.billTypeAtomic != :bta) "
                     + " and bs.sessionInstance=:si"
                     + " and bs.sessionDate= :ssDate"
                     + " order by bs.serialNo";
             HashMap hh = new HashMap();
             hh.put("ssDate", sessionInstance.getSessionDate());
             hh.put("si", sessionInstance);
+            hh.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
             List<BillType> bts = new ArrayList<>();
             bts.add(BillType.ChannelAgent);
             bts.add(BillType.ChannelCash);
@@ -4949,10 +4980,12 @@ public class ChannelReportController implements Serializable {
                     + " bs.bill.cancelled=false and "
                     + " bs.bill.refunded=false and "
                     + " bs.bill.billType in :tbs and "
+                    + " (bs.bill.billTypeAtomic is null or bs.bill.billTypeAtomic != :bta) and "
                     + " bs.serviceSession.id=" + serviceSession.getId() + " and bs.sessionDate= :ssDate"
                     + " order by bs.serialNo";
             HashMap hh = new HashMap();
             hh.put("ssDate", serviceSession.getSessionDate());
+            hh.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
             List<BillType> bts = new ArrayList<>();
             bts.add(BillType.ChannelAgent);
             bts.add(BillType.ChannelCash);
@@ -5196,7 +5229,7 @@ public class ChannelReportController implements Serializable {
     public void createAgentHistoryTable() {
         agentHistorys = new ArrayList<>();
 
-        agentHistorys = createAgentHistory(fromDate, toDate, institution, null);
+        agentHistorys = createAgentHistory(getFromDate(), getToDate(), institution, null);
 
     }
 
@@ -5205,7 +5238,7 @@ public class ChannelReportController implements Serializable {
         HistoryType[] hts = {HistoryType.CollectingCentreBalanceUpdateBill, HistoryType.CollectingCentreDeposit, HistoryType.CollectingCentreDepositCancel, HistoryType.CollectingCentreBilling};
         List<HistoryType> historyTypes = Arrays.asList(hts);
 
-        agentHistorys = createAgentHistory(fromDate, toDate, institution, historyTypes);
+        agentHistorys = createAgentHistory(getFromDate(), getToDate(), institution, historyTypes);
 
     }
 
@@ -5283,7 +5316,7 @@ public class ChannelReportController implements Serializable {
     public void processUserWiseSummeryReport() {
         userSummaryDtos = new ArrayList<>();
 
-        userSummaryDtos = channelService.fetchChannelUserSummeryDTOs(fromDate, institution, department, paymentMethod);
+        userSummaryDtos = channelService.fetchChannelUserSummeryDTOs(getFromDate(), institution, department, paymentMethod);
 
         if (userSummaryDtos == null) {
             return;
@@ -5713,7 +5746,7 @@ public class ChannelReportController implements Serializable {
         try {
             String fileName = "Channel_Scanning_Income_Report";
             
-            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            String dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
             if (dates != null && !dates.isEmpty()) {
                 fileName += "_" + dates;
             }
@@ -5741,7 +5774,7 @@ public class ChannelReportController implements Serializable {
         StreamedContent downloadingExcel = null;
         try {
             String fileName = "Channel_Scanning_Income_Report";
-            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            String dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
             if (dates != null && !dates.isEmpty()) {
                 fileName += "_" + dates;
             }
@@ -5813,7 +5846,7 @@ public class ChannelReportController implements Serializable {
         if (cardIncomeReportSC != null && cardIncomeReportSC.get("From Date") instanceof Date && cardIncomeReportSC.get("To Date") instanceof Date) {
             dates = CommonFunctions.dateRangeForFileName((Date) cardIncomeReportSC.get("From Date"), (Date) cardIncomeReportSC.get("To Date"), sessionController.getApplicationPreference().getLongDateFormat());
         } else {
-            dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
         }
         if (dates != null && !dates.isEmpty()) {
             fileName += "_" + dates;
@@ -5852,7 +5885,7 @@ public class ChannelReportController implements Serializable {
         if (absentPatientsSC != null && absentPatientsSC.get("From Date") instanceof Date && absentPatientsSC.get("To Date") instanceof Date) {
             dates = CommonFunctions.dateRangeForFileName((Date) absentPatientsSC.get("From Date"), (Date) absentPatientsSC.get("To Date"), sessionController.getApplicationPreference().getLongDateFormat());
         } else {
-            dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
         }
         if (dates != null && !dates.isEmpty()) {
             fileName += "_" + dates;
@@ -5931,7 +5964,7 @@ public class ChannelReportController implements Serializable {
         try {
             String fileName = "Channel_Income_Daily_Summary_Report";
             
-            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            String dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
             if (dates != null && !dates.isEmpty()) {
                 fileName += "_" + dates;
             }
@@ -5977,7 +6010,7 @@ public class ChannelReportController implements Serializable {
         StreamedContent downloadingExcel = null;
         try {
             String fileName = "Channel_Income_Daily_Summary_Report";
-            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            String dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
             if (dates != null && !dates.isEmpty()) {
                 fileName += "_" + dates;
             }
@@ -6001,7 +6034,7 @@ public class ChannelReportController implements Serializable {
         StreamedContent downloadingExcel = null;
         try {
             String fileName = "Channel_Summary_Collection_Report";
-            String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            String dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
             if (dates != null && !dates.isEmpty()) {
                 fileName += "_" + dates;
             }
@@ -6044,7 +6077,7 @@ public class ChannelReportController implements Serializable {
     // Excel Export fileName : channel income
     public String getIncomeWithAgentBookingReportFileName() {
         String fileName = "Income_With_Agent_Booking_Report";
-        String dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+        String dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
         if (dates != null && !dates.isEmpty()) {
             fileName += "_" + dates;
         }
@@ -6056,8 +6089,8 @@ public class ChannelReportController implements Serializable {
     public Map<String, Object> getFiltersForChannelIncomeReports() {
         Map<String, Object> params = new LinkedHashMap<>();
         String dateTimeFormat = sessionController.getApplicationPreference().getLongDateTimeFormat();
-        String formattedFromDate = fromDate != null ? new SimpleDateFormat(dateTimeFormat).format(fromDate) : "Not available";
-        String formattedToDate = toDate != null ? new SimpleDateFormat(dateTimeFormat).format(toDate) : "Not available";
+        String formattedFromDate = new SimpleDateFormat(dateTimeFormat).format(getFromDate());
+        String formattedToDate = new SimpleDateFormat(dateTimeFormat).format(getToDate());
         String reportStatusString = "Details View";
         if (reportStatus != null && !reportStatus.isEmpty() && reportStatus.equalsIgnoreCase("Summery")) {
             reportStatusString = "Summary View";
@@ -6076,8 +6109,8 @@ public class ChannelReportController implements Serializable {
         Map<String, Object> params = new LinkedHashMap<>();
         SimpleDateFormat sdf = new SimpleDateFormat(sessionController.getApplicationPreference().getLongDateTimeFormat());
 
-        params.put("From Date", fromDate);
-        params.put("To Date", toDate);
+        params.put("From Date", getFromDate());
+        params.put("To Date", getToDate());
         params.put("Consultant", staff != null ? (staff.getPerson() != null ? staff.getPerson().getCapitalNameWithTitle() : "N/A") : "All");
         params.put("Payment Method", getSelectedPaymentMethodsAsString());
 
@@ -6114,7 +6147,7 @@ public class ChannelReportController implements Serializable {
         if (cardIncomeReportSC != null && cardIncomeReportSC.get("From Date") instanceof Date && cardIncomeReportSC.get("To Date") instanceof Date) {
             dates = CommonFunctions.dateRangeForFileName((Date) cardIncomeReportSC.get("From Date"), (Date) cardIncomeReportSC.get("To Date"), sessionController.getApplicationPreference().getLongDateFormat());
         } else {
-            dates = CommonFunctions.dateRangeForFileName(fromDate, toDate, sessionController.getApplicationPreference().getLongDateFormat());
+            dates = CommonFunctions.dateRangeForFileName(getFromDate(), getToDate(), sessionController.getApplicationPreference().getLongDateFormat());
         }
         if (dates != null && !dates.isEmpty()) {
             fileName += "_" + dates;
@@ -6170,8 +6203,8 @@ public class ChannelReportController implements Serializable {
             }
         }
 
-        params.put("From Date", fromDate);
-        params.put("To Date", toDate);
+        params.put("From Date", getFromDate());
+        params.put("To Date", getToDate());
         params.put("Institution", institution != null ? institution.getName() : "All Institutions");
         params.put("Report Status", reportStatusString);
         params.put("User", webUser != null ? webUser.getName() : "All Users");
@@ -6195,7 +6228,7 @@ public class ChannelReportController implements Serializable {
         if (userSummeryRpSC != null && userSummeryRpSC.get("Appointment Date") instanceof String) {
             dates = (String) userSummeryRpSC.get("Appointment Date");
         } else {
-            dates = CommonFunctions.dateRangeForFileName(fromDate, null, sessionController.getApplicationPreference().getLongDateFormat(), true);
+            dates = CommonFunctions.dateRangeForFileName(getFromDate(), null, sessionController.getApplicationPreference().getLongDateFormat(), true);
         }
         if (dates != null && !dates.isEmpty()) {
             fileName += "_" + dates;
@@ -6236,7 +6269,7 @@ public class ChannelReportController implements Serializable {
     public Map<String, Object> getFiltersForUserWiseSummeryReport() {
         Map<String, Object> params = new LinkedHashMap<>();
 
-        params.put("Appointment Date", new SimpleDateFormat(sessionController.getApplicationPreference().getLongDateFormat()).format(fromDate));
+        params.put("Appointment Date", new SimpleDateFormat(sessionController.getApplicationPreference().getLongDateFormat()).format(getFromDate()));
         params.put("Institution", institution != null ? institution.getName() : "All Institutions");
         params.put("Department", department != null ? department.getName() : "All Departments");
         params.put("Payment Method", paymentMethod != null ? paymentMethod.getLabel() : "All Payment Methods");

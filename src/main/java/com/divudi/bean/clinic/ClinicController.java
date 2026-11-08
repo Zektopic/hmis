@@ -70,6 +70,8 @@ import com.divudi.core.facade.ServiceSessionFacade;
 import com.divudi.core.facade.SmsFacade;
 import com.divudi.core.facade.StaffFacade;
 import com.divudi.core.util.JsfUtil;
+import com.divudi.bean.channel.ChannelPatientValidationRules;
+import com.divudi.core.util.SessionBookingLock;
 import com.divudi.bean.hr.StaffController;
 import com.divudi.bean.membership.PaymentSchemeController;
 import com.divudi.bean.opd.OpdBillController;
@@ -1457,27 +1459,20 @@ public class ClinicController implements Serializable, ControllerWithPatientView
             e.setSendingMessage(smsBody(methodBillSession));
             e.setDepartment(getSessionController().getLoggedUser().getDepartment());
             e.setInstitution(getSessionController().getLoggedUser().getInstitution());
-            e.setPending(false);
+            e.setPending(true);
             getSmsFacade().create(e);
 
-            Boolean sent = smsManager.sendSms(e);
-            e.setSentSuccessfully(sent);
-            getSmsFacade().edit(e);
+            // Sent after this request returns, so the settle does not wait for the SMS gateway (#24970)
+            smsManager.sendSavedSmsAsync(e.getId());
 
         }
 
-        JsfUtil.addSuccessMessage("SMS Sent");
     }
 
     public String smsBody(BillSession r) {
-        String securityKey = sessionController.getApplicationPreference().getEncrptionKey();
-        if (securityKey == null || securityKey.trim().equals("")) {
-            sessionController.getApplicationPreference().setEncrptionKey(securityController.generateRandomKey(10));
-            sessionController.savePreferences(sessionController.getApplicationPreference());
-        }
         Calendar c = Calendar.getInstance();
         c.add(Calendar.DATE, 2);
-        String temId = securityController.encryptAlphanumeric(r.getId().toString(), securityKey);
+        String temId = securityController.createLinkToken(SecurityController.LINK_SESSION, r.getId(), c.getTime(), sessionController);
         String url = CommonFunctions.getBaseUrl() + "faces/requests/cbss.xhtml?id=" + temId;
         String b = "Your session of "
                 + r.getSessionInstance().getOriginatingSession().getName()
@@ -3286,6 +3281,9 @@ public class ClinicController implements Serializable, ControllerWithPatientView
             JsfUtil.addErrorMessage("Please select a patient");
             return;
         }
+        if (patient.getPerson() != null) {
+            patient.getPerson().fillDobFromAgeComponentsIfMissing();
+        }
         if (patientErrorPresent(patient)) {
             JsfUtil.addErrorMessage("Please Enter Patient Details.");
             settleSucessFully = false;
@@ -3411,7 +3409,15 @@ public class ClinicController implements Serializable, ControllerWithPatientView
         }
 
         saveSelected(patient);
-        printingBill = saveBilledBill(reservedBooking, firstVisit);
+        // Capacity re-check and the booking insert must not interleave with another booking for the same session (#24929).
+        try (SessionBookingLock.Hold hold = SessionBookingLock.acquire(selectedSessionInstance)) {
+            if (isMaxBookingsForVisitTypeReached(firstVisit)) {
+                JsfUtil.addErrorMessage("The maximum number of bookings for this visit type has been reached.");
+                settleSucessFully = false;
+                return;
+            }
+            printingBill = saveBilledBill(reservedBooking, firstVisit);
+        }
         if (!configOptionApplicationController.getBooleanValueByKey("No Payments for Clinic Booking")) {
             if (printingBill.getBillTypeAtomic()
                     .getBillFinanceType() == BillFinanceType.CASH_IN) {
@@ -3438,6 +3444,43 @@ public class ClinicController implements Serializable, ControllerWithPatientView
 
         JsfUtil.addSuccessMessage(
                 "Channel Booking Added.");
+    }
+
+    /**
+     * Fresh DB count of the active bookings of the selected session for the given
+     * visit type, compared with the configured maximum (0 means no limit). Call
+     * it under SessionBookingLock so the count includes bookings just saved.
+     */
+    private boolean isMaxBookingsForVisitTypeReached(boolean firstVisit) {
+        int maxNo = firstVisit ? selectedSessionInstance.getMaxNoForFirstVisits() : selectedSessionInstance.getMaxNoForSubsequentVisits();
+        if (maxNo <= 0) {
+            return false;
+        }
+        BillType[] billTypes = {
+            BillType.ChannelAgent,
+            BillType.ChannelCash,
+            BillType.ChannelOnCall,
+            BillType.ChannelStaff,
+            BillType.ChannelCredit,
+            BillType.ChannelResheduleWithOutPayment,
+            BillType.ChannelResheduleWithPayment
+        };
+        String jpql = "select count(bs) from BillSession bs "
+                + " where bs.retired=false"
+                + " and bs.sessionInstance=:si"
+                + " and bs.bill.billType in :bt"
+                + " and type(bs.bill)=:class"
+                + " and (bs.bill.billTypeAtomic is null or bs.bill.billTypeAtomic != :bta)"
+                + " and bs.bill.cancelled=false"
+                + " and bs.firstVisit=:fv";
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("si", selectedSessionInstance);
+        params.put("bt", Arrays.asList(billTypes));
+        params.put("class", BilledBill.class);
+        params.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
+        params.put("fv", firstVisit);
+        long booked = getBillSessionFacade().findLongByJpql(jpql, params);
+        return booked >= maxNo;
     }
 
     public long totalReservedNumberCount(SessionInstance s) {
@@ -3486,18 +3529,11 @@ public class ClinicController implements Serializable, ControllerWithPatientView
         e.setSendingMessage(createChanellBookingSms(printingBill));
         e.setDepartment(getSessionController().getLoggedUser().getDepartment());
         e.setInstitution(getSessionController().getLoggedUser().getInstitution());
-        e.setPending(false);
+        e.setPending(true);
         e.setSmsType(MessageType.ChannelBooking);
         getSmsFacade().create(e);
-        Boolean sent = smsManager.sendSms(e);
-        e.setSentSuccessfully(sent);
-        getSmsFacade().edit(e);
-
-        if (sent) {
-            JsfUtil.addSuccessMessage("SMS Sent");
-        } else {
-            JsfUtil.addSuccessMessage("SMS Failed");
-        }
+        // Sent after this request returns, so the settle does not wait for the SMS gateway (#24970)
+        smsManager.sendSavedSmsAsync(e.getId());
 
     }
 
@@ -5022,31 +5058,32 @@ public class ClinicController implements Serializable, ControllerWithPatientView
             return;
         }
 
-        // Prepare the SQL query
-        String sql = "SELECT bs.SESSIONINSTANCE_ID, "
-                + "COUNT(bs.ID) AS bookedPatientCount, "
-                + "SUM(CASE WHEN (bs.PAIDBILLSESSION_ID IS NOT NULL and bs.RESCHEDULEDTOBILLSESSION_ID is NULL) THEN 1 ELSE 0 END) AS paidPatientCount, "
-                + "SUM(CASE WHEN bs.COMPLETED = TRUE THEN 1 ELSE 0 END) AS completedPatientCount, "
-                + "SUM(CASE WHEN b.CANCELLED = TRUE THEN 1 ELSE 0 END) AS cancelPatientCount, "
-                + "SUM(CASE WHEN b.REFUNDED = TRUE THEN 1 ELSE 0 END) AS refundedPatientCount, "
-                + "SUM(CASE WHEN bs.PAIDBILLSESSION_ID IS NULL AND b.CANCELLED = FALSE THEN 1 ELSE 0 END) AS onCallPatientCount, "
-                + "SUM(CASE WHEN bs.RESERVEDBOOKING = TRUE THEN 1 ELSE 0 END) AS reservedBookingCount "
-                + "FROM billsession bs "
-                + "JOIN bill b ON bs.BILL_ID = b.ID "
-                + "WHERE bs.RETIRED = FALSE "
-                + "AND b.BILLTYPE IN ('ChannelAgent', 'ChannelCash', 'ChannelOnCall', 'ChannelStaff', 'ChannelCredit', 'ChannelResheduleWithPayment', 'ChannelResheduleWithOutPayment') "
-                + "AND b.DTYPE = 'BilledBill' "
-                + "AND bs.SESSIONINSTANCE_ID IN (:ids) "
-                + "GROUP BY bs.SESSIONINSTANCE_ID";
+        // JPQL, not native SQL: native table names break on case-sensitive MySQL (#25001)
+        String jpql = "select bs.sessionInstance.id, "
+                + " count(bs), "
+                + " sum(case when (bs.paidBillSession is not null and bs.rescheduledToBillSession is null) then 1 else 0 end), "
+                + " sum(case when bs.completed = true then 1 else 0 end), "
+                + " sum(case when b.cancelled = true then 1 else 0 end), "
+                + " sum(case when b.refunded = true then 1 else 0 end), "
+                + " sum(case when bs.paidBillSession is null and b.cancelled = false then 1 else 0 end), "
+                + " sum(case when bs.reservedBooking = true then 1 else 0 end) "
+                + " from BillSession bs join bs.bill b "
+                + " where bs.retired = false "
+                + " and b.billType in :bts "
+                + " and type(b) = :class "
+                + " and bs.sessionInstance.id in :ids "
+                + " group by bs.sessionInstance.id";
 
-        // Prepare the parameters
         List<Long> sessionInstanceIds = sessionInstances.stream()
                 .map(SessionInstance::getId)
                 .collect(Collectors.toList());
         Map<String, Object> parameters = new HashMap<>();
+        parameters.put("bts", Arrays.asList(BillType.ChannelAgent, BillType.ChannelCash, BillType.ChannelOnCall, BillType.ChannelStaff,
+                BillType.ChannelCredit, BillType.ChannelResheduleWithPayment, BillType.ChannelResheduleWithOutPayment));
+        parameters.put("class", BilledBill.class);
+        parameters.put("ids", sessionInstanceIds);
 
-        // Execute the query
-        List<Object[]> results = billSessionFacade.findObjectsArrayByNativeQuery(sql, parameters, sessionInstanceIds);
+        List<Object[]> results = billSessionFacade.findObjectsArrayByJpql(jpql, parameters, TemporalType.TIMESTAMP);
 
         // Process the results
         Map<Long, SessionInstance> sessionInstanceMap = sessionInstances.stream()
@@ -5428,32 +5465,6 @@ public class ClinicController implements Serializable, ControllerWithPatientView
 
         BillSession savingBillSession;
         savingBillSession = createBillSession(savingBill, savingBillItem, true, false);
-
-        BillSession bs = new BillSession();
-        bs.setAbsent(false);
-        bs.setBill(savingBill);
-        bs.setBillItem(savingBillItem);
-        bs.setCreatedAt(new Date());
-        bs.setDepartment(getSelectedSessionInstance().getOriginatingSession().getDepartment());
-        bs.setInstitution(getSelectedSessionInstance().getOriginatingSession().getInstitution());
-        bs.setItem(getSelectedSessionInstance().getOriginatingSession());
-        bs.setSessionInstance(getSelectedSessionInstance());
-        bs.setSessionDate(getSelectedSessionInstance().getSessionDate());
-        bs.setSessionTime(getSelectedSessionInstance().getSessionTime());
-        bs.setStaff(getSelectedSessionInstance().getStaff());
-
-        List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(getSelectedSessionInstance().getOriginatingSession().getReserveNumbers());
-        Integer count;
-
-        count = clinicService.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers, false);
-
-        if (count != null) {
-            bs.setSerialNo(count);
-        } else {
-            bs.setSerialNo(1);
-        }
-
-        getBillSessionFacade().create(bs);
 
         List<BillFee> savingBillFees = new ArrayList<>();
 
@@ -6090,32 +6101,10 @@ public class ClinicController implements Serializable, ControllerWithPatientView
         if (encryptedBillSessionId == null) {
             return;
         }
-
-        String decodedIdStr;
-        try {
-            decodedIdStr = URLDecoder.decode(encryptedBillSessionId, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            // Handle the exception, possibly with logging
-            return;
-        }
-        String securityKey = sessionController.getApplicationPreference().getEncrptionKey();
-        if (securityKey == null || securityKey.trim().equals("")) {
-            sessionController.getApplicationPreference().setEncrptionKey(securityController.generateRandomKey(10));
-            sessionController.savePreferences(sessionController.getApplicationPreference());
-        }
-
-        String idStr = securityController.decryptAlphanumeric(encryptedBillSessionId, securityKey);
-
-        if (idStr == null || idStr.trim().isEmpty()) {
-            // Handle the situation where decryption returns null or an empty string
-            return;
-        }
-
-        Long id;
-        try {
-            id = Long.parseLong(idStr);
-        } catch (NumberFormatException e) {
-            // Handle the exception, possibly with logging
+        // Signed, self-expiring token only (the alphanumeric encoding of a
+        // numeric id did not depend on the key).
+        Long id = securityController.decodeLinkId(SecurityController.LINK_SESSION, encryptedBillSessionId, sessionController);
+        if (id == null) {
             return;
         }
 
@@ -6379,24 +6368,27 @@ public class ClinicController implements Serializable, ControllerWithPatientView
         List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(reserverNumberString);
         Integer count;
 
-        if (forReservedNumbers) {
-            // Pass the selectedReservedBookingNumber to the service method
-            count = clinicService.getNextAvailableReservedNumber(getSelectedSessionInstance(), reservedNumbers, selectedReserverdBookingNumber, firstVisit);
-            if (count == null) {
+        // Serial allocation and the insert must not interleave with another booking for the same session (#24929).
+        try (SessionBookingLock.Hold hold = SessionBookingLock.acquire(getSelectedSessionInstance())) {
+            if (forReservedNumbers) {
+                // Pass the selectedReservedBookingNumber to the service method
+                count = clinicService.getNextAvailableReservedNumber(getSelectedSessionInstance(), reservedNumbers, selectedReserverdBookingNumber, firstVisit);
+                if (count == null) {
+                    count = clinicService.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers, firstVisit);
+                    JsfUtil.addErrorMessage("No reserved numbers available. Normal number is given");
+                }
+            } else {
                 count = clinicService.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers, firstVisit);
-                JsfUtil.addErrorMessage("No reserved numbers available. Normal number is given");
             }
-        } else {
-            count = clinicService.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers, firstVisit);
-        }
 
-        if (count != null) {
-            bs.setSerialNo(count);
-        } else {
-            bs.setSerialNo(1);
-        }
+            if (count != null) {
+                bs.setSerialNo(count);
+            } else {
+                bs.setSerialNo(1);
+            }
 
-        getBillSessionFacade().create(bs);
+            getBillSessionFacade().create(bs);
+        }
 
         return bs;
     }
@@ -8370,7 +8362,14 @@ public class ClinicController implements Serializable, ControllerWithPatientView
         if (patient.getPerson().getId() == null) {
             patient.getPerson().setCreatedAt(new Date());
             patient.getPerson().setCreater(sessionController.getLoggedUser());
-            personFacade.create(patient.getPerson());
+            if (patient.getId() != null) {
+                // Existing patient: the patient is merged below, which cascades a merge, so a
+                // brand-new person still has to be persisted here.
+                personFacade.create(patient.getPerson());
+            }
+            // New patient: the person is persisted by the cascade from Patient.person
+            // (cascade = ALL) in patientFacade.create below. Persisting it here too leaves an
+            // unreferenced duplicate PERSON row (#23900).
         } else {
             personFacade.edit(patient.getPerson());
         }
@@ -8384,9 +8383,25 @@ public class ClinicController implements Serializable, ControllerWithPatientView
         }
     }
 
+    /**
+     * The Save Patient Details button on Clinic Sessions: validates, saves,
+     * closes the edit panel and tells the user. saveSelected(Patient), which the
+     * booking flow calls, stays silent.
+     */
     @Override
     public void saveSelectedPatient() {
+        if (patient != null && patient.getPerson() != null) {
+            patient.getPerson().fillDobFromAgeComponentsIfMissing();
+        }
+        String error = ChannelPatientValidationRules.validatePatientForSave(patient);
+        if (error != null) {
+            JsfUtil.addErrorMessage(error);
+            return;
+        }
+        boolean isNew = patient.getId() == null;
         saveSelected(patient);
+        setPatientDetailsEditable(false);
+        JsfUtil.addSuccessMessage(isNew ? "Patient details saved successfully" : "Patient details updated successfully");
     }
 
     @Override

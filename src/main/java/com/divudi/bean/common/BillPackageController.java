@@ -239,7 +239,7 @@ public class BillPackageController implements Serializable, ControllerWithPatien
                 getPatient().getPerson().setCreater(getSessionController().getLoggedUser());
                 getPatient().getPerson().setCreatedAt(new Date());
 //                getPatientFacade().create(getPatient());
-                getPersonFacade().create(getPatient().getPerson());
+                // Patient.person is cascade = ALL, so creating the patient below also saves its person (#23900).
             }
             try {
                 getPatientFacade().create(getPatient());
@@ -1535,6 +1535,7 @@ public class BillPackageController implements Serializable, ControllerWithPatien
         individualCancelltionBill.setDepartment(getSessionController().getDepartment());
         individualCancelltionBill.setInstitution(getSessionController().getInstitution());
         individualCancelltionBill.setForwardReferenceBill(cancellationBatchBill);
+        individualCancelltionBill.setReferenceBill(originalBill);
         individualCancelltionBill.setComments(comment);
         billService.saveBill(individualCancelltionBill);
 
@@ -1990,12 +1991,12 @@ public class BillPackageController implements Serializable, ControllerWithPatien
                 // Fixed: Sum only the selected payment method's value for this component
                 multiplePaymentMethodTotalValue += calculateSelectedPaymentTotal(cd);
             }
-            remainAmount = total - multiplePaymentMethodTotalValue;
-            return total - multiplePaymentMethodTotalValue;
+            remainAmount = netTotal - multiplePaymentMethodTotalValue;
+            return netTotal - multiplePaymentMethodTotalValue;
 
         }
-        remainAmount = total;
-        return total;
+        remainAmount = netTotal;
+        return netTotal;
     }
 
     @Override

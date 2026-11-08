@@ -911,6 +911,25 @@ public class PharmacyBean {
         return true;
     }
 
+    /**
+     * Sets a staff stock's quantity and records a staff history row. The history
+     * is written for the staff member who owns the freshly reloaded row, never a
+     * possibly stale caller-held owner (#24791).
+     */
+    public boolean resetStaffStock(PharmaceuticalBillItem ph, Stock stock, double qty) {
+        if (stock == null || stock.getId() == null) {
+            return false;
+        }
+        stock = getStockFacade().findWithoutCache(stock.getId());
+        if (stock == null || stock.getStaff() == null) {
+            return false;
+        }
+        stock.setStock(qty);
+        getStockFacade().editAndCommit(stock);
+        addToStockHistory(ph, stock, stock.getStaff());
+        return true;
+    }
+
     public Stock addToStock(PharmaceuticalBillItem pharmaceuticalBillItem, double qty, Staff staff) {
         String sql;
         HashMap hm = new HashMap();
@@ -2293,11 +2312,14 @@ public class PharmacyBean {
             v.setVmp(ampp.getAmp().getVmp());
             v.setDblValue(ampp.getDblValue());
             v.setPackUnit(packUnit);
-            try {
-                v.setName(ampp.getAmp().getVmp().getName() + "(" + ampp.getDblValue() + " " + ampp.getVmpp().getPackUnit().getName() + ")");
-            } catch (Exception e) {
-                //System.err.println("Error : " + e.getMessage());
-            }
+            // Name it from the pack unit passed in, as the item API's find-or-create does. It used
+            // ampp.getVmpp().getPackUnit(), which is null for a new AMPP, and the swallowed
+            // exception left the VMPP without a name (#25205).
+            Vmp vmp = ampp.getAmp().getVmp();
+            String vmpName = vmp != null && vmp.getName() != null ? vmp.getName() : "";
+            String unitName = packUnit != null && packUnit.getName() != null ? packUnit.getName() : "";
+            v.setName(vmpName + " (" + ampp.getDblValue() + " " + unitName + ")");
+            v.setCreatedAt(Calendar.getInstance().getTime());
             getVmppFacade().create(v);
         }
         return v;

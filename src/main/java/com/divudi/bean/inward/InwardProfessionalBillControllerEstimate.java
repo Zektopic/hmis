@@ -181,6 +181,10 @@ public class InwardProfessionalBillControllerEstimate implements Serializable {
             return true;
         }
 
+        if (inwardBean.blockIfDischarged(getBatchBill().getPatientEncounter())) {
+            return true;
+        }
+
         return false;
 
     }
@@ -619,6 +623,10 @@ public class InwardProfessionalBillControllerEstimate implements Serializable {
             return;
         }
 
+        if (inwardBean.blockIfDischarged(getCurrent().getPatientEncounter())) {
+            return;
+        }
+
         if (currentBillFee == null) {
             JsfUtil.addErrorMessage("Nothing to add");
             return;
@@ -713,6 +721,10 @@ public class InwardProfessionalBillControllerEstimate implements Serializable {
     private boolean errorCheck() {
         if (getCurrent().getPatientEncounter() == null) {
             JsfUtil.addErrorMessage("Selct Patient Encounter");
+            return true;
+        }
+
+        if (inwardBean.blockIfDischarged(getCurrent().getPatientEncounter())) {
             return true;
         }
 

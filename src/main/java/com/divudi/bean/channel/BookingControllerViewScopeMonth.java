@@ -16,6 +16,7 @@ import com.divudi.bean.common.PriceMatrixController;
 import com.divudi.bean.common.SecurityController;
 import com.divudi.bean.common.SessionController;
 import com.divudi.bean.common.ViewScopeDataTransferController;
+import com.divudi.bean.common.ControllerWithPatientViewScope;
 
 import com.divudi.core.data.ApplicationInstitution;
 import com.divudi.core.data.BillClassType;
@@ -73,6 +74,7 @@ import com.divudi.core.data.BillFinanceType;
 import com.divudi.core.data.BillTypeAtomic;
 import com.divudi.core.data.OptionScope;
 import com.divudi.core.data.dataStructure.ComponentDetail;
+import com.divudi.service.ChannelService;
 import com.divudi.service.StaffService;
 import com.divudi.core.entity.Doctor;
 import com.divudi.core.entity.Payment;
@@ -85,6 +87,7 @@ import com.divudi.core.facade.AgentReferenceBookFacade;
 import com.divudi.core.facade.PaymentFacade;
 import com.divudi.core.facade.SessionInstanceFacade;
 import com.divudi.core.util.CommonFunctions;
+import com.divudi.core.util.SessionBookingLock;
 import java.io.Serializable;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -117,13 +120,15 @@ import org.primefaces.model.ScheduleModel;
  */
 @Named
 @ViewScoped
-public class BookingControllerViewScopeMonth implements Serializable {
+public class BookingControllerViewScopeMonth implements Serializable, ControllerWithPatientViewScope {
 
     /**
      * EJBs
      */
     @EJB
     private StaffFacade staffFacade;
+    @EJB
+    private ChannelService channelService;
     @EJB
     private ServiceSessionFacade serviceSessionFacade;
     @EJB
@@ -498,33 +503,35 @@ public class BookingControllerViewScopeMonth implements Serializable {
         List<Integer> lastSessionReservedNumbers = CommonFunctions.convertStringToIntegerList(getSelectedSessionInstance().getOriginatingSession().getReserveNumbers());
         List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(getSelectedSessionInstanceForRechedule().getOriginatingSession().getReserveNumbers());
 
-        Integer count = null;
-        boolean reservedSession;
+        try (SessionBookingLock.Hold hold = SessionBookingLock.acquire(getSelectedSessionInstanceForRechedule())) {
+            Integer count = null;
+            boolean reservedSession;
 
-        if (reservedBooking) {
-            if (lastSessionReservedNumbers.isEmpty()) {
-                JsfUtil.addErrorMessage("No Reserved Numbers FInd !");
-                return;
-            }
-            for (Integer rn : lastSessionReservedNumbers) {
-                if (bs.getSerialNo() == rn) {
-                    count = serviceSessionBean.getNextAvailableReservedNumber(getSelectedSessionInstanceForRechedule(), reservedNumbers, selectedReserverdBookingNumber);
-                    if (count == null) {
-                        count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstanceForRechedule(), reservedNumbers);
-                        JsfUtil.addErrorMessage("No reserved numbers available. Normal number is given");
+            if (reservedBooking) {
+                if (lastSessionReservedNumbers.isEmpty()) {
+                    JsfUtil.addErrorMessage("No Reserved Numbers FInd !");
+                    return;
+                }
+                for (Integer rn : lastSessionReservedNumbers) {
+                    if (bs.getSerialNo() == rn) {
+                        count = serviceSessionBean.getNextAvailableReservedNumber(getSelectedSessionInstanceForRechedule(), reservedNumbers, selectedReserverdBookingNumber);
+                        if (count == null) {
+                            count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstanceForRechedule(), reservedNumbers);
+                            JsfUtil.addErrorMessage("No reserved numbers available. Normal number is given");
+                        }
                     }
                 }
-            }
 
-        } else {
-            count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstanceForRechedule(), reservedNumbers);
+            } else {
+                count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstanceForRechedule(), reservedNumbers);
+            }
+            if (count != null) {
+                newBillSession.setSerialNo(count);
+            } else {
+                newBillSession.setSerialNo(1);
+            }
+            getBillSessionFacade().edit(newBillSession);
         }
-        if (count != null) {
-            newBillSession.setSerialNo(count);
-        } else {
-            newBillSession.setSerialNo(1);
-        }
-        getBillSessionFacade().edit(newBillSession);
         bs.setRecheduledSession(true);
         bs.setRescheduledToBillSession(newBillSession);
         // bs.setReferenceBillSession(newBillSession);
@@ -1298,6 +1305,12 @@ public class BookingControllerViewScopeMonth implements Serializable {
             JsfUtil.addErrorMessage("No session selected");
             return;
         }
+        // Re-read the flag: another user may have cancelled the session after this page was opened
+        SessionInstance latestSessionInstance = selectedSessionInstance.getId() == null ? null : sessionInstanceFacade.find(selectedSessionInstance.getId());
+        if (selectedSessionInstance.isCancelled() || (latestSessionInstance != null && latestSessionInstance.isCancelled())) {
+            JsfUtil.addErrorMessage("This session has been cancelled and cannot be started.");
+            return;
+        }
         if (!selectedSessionInstance.isArrived()) {
             markAsArrived();
         }
@@ -1379,27 +1392,20 @@ public class BookingControllerViewScopeMonth implements Serializable {
             e.setSendingMessage(smsBody(methodBillSession));
             e.setDepartment(getSessionController().getLoggedUser().getDepartment());
             e.setInstitution(getSessionController().getLoggedUser().getInstitution());
-            e.setPending(false);
+            e.setPending(true);
             getSmsFacade().create(e);
 
-            Boolean sent = smsManager.sendSms(e);
-            e.setSentSuccessfully(sent);
-            getSmsFacade().edit(e);
+            // Sent after this request returns, so the settle does not wait for the SMS gateway (#24970)
+            smsManager.sendSavedSmsAsync(e.getId());
 
         }
 
-        JsfUtil.addSuccessMessage("SMS Sent");
     }
 
     public String smsBody(BillSession r) {
-        String securityKey = sessionController.getApplicationPreference().getEncrptionKey();
-        if (securityKey == null || securityKey.trim().equals("")) {
-            sessionController.getApplicationPreference().setEncrptionKey(securityController.generateRandomKey(10));
-            sessionController.savePreferences(sessionController.getApplicationPreference());
-        }
         Calendar c = Calendar.getInstance();
         c.add(Calendar.DATE, 2);
-        String temId = securityController.encryptAlphanumeric(r.getId().toString(), securityKey);
+        String temId = securityController.createLinkToken(SecurityController.LINK_SESSION, r.getId(), c.getTime(), sessionController);
         String url = CommonFunctions.getBaseUrl() + "faces/requests/cbss.xhtml?id=" + temId;
         String b = "Your session of "
                 + r.getSessionInstance().getOriginatingSession().getName()
@@ -2947,6 +2953,9 @@ public class BookingControllerViewScopeMonth implements Serializable {
             JsfUtil.addErrorMessage("Please select a patient");
             return;
         }
+        if (patient.getPerson() != null) {
+            patient.getPerson().fillDobFromAgeComponentsIfMissing();
+        }
         if (patientErrorPresent(patient)) {
             JsfUtil.addErrorMessage("Please Enter Patient Details.");
             settleSucessFully = false;
@@ -2991,35 +3000,6 @@ public class BookingControllerViewScopeMonth implements Serializable {
             }
         }
 
-        if (selectedSessionInstance.getMaxNo() != 0 && configOptionApplicationController.getBooleanValueByKey("Limited appoinments session can't get appoinement more than max amount.")) {
-            if (selectedSessionInstance.getBookedPatientCount() != null) {
-                int maxNo = selectedSessionInstance.getMaxNo();
-                long bookedPatientCount = selectedSessionInstance.getBookedPatientCount();
-                long reservedBookingCount = selectedSessionInstance.getReservedBookingCount() != null ? selectedSessionInstance.getReservedBookingCount() : 0L;
-                long totalPatientCount;
-
-                List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(selectedSessionInstance.getReserveNumbers());
-
-                if (reservedBooking) {
-                    bookedPatientCount = bookedPatientCount;
-                } else {
-                    bookedPatientCount = bookedPatientCount + reservedNumbers.size() - reservedBookingCount;
-                }
-
-                if (selectedSessionInstance.getCancelPatientCount() != null) {
-                    long canceledPatientCount = selectedSessionInstance.getCancelPatientCount();
-                    totalPatientCount = bookedPatientCount - canceledPatientCount;
-                } else {
-                    totalPatientCount = bookedPatientCount;
-                }
-                if (maxNo <= totalPatientCount) {
-                    JsfUtil.addErrorMessage("Error: The maximum number of bookings (" + maxNo + ") has been Reached.");
-                    return;
-
-                }
-            }
-        }
-
         if (configOptionApplicationController.getBooleanValueByKey("Allow bill settlement without patient area")) {
             if (patient.getPerson().getArea() == null || patient.getPerson().getArea().getName().isEmpty()) {
                 JsfUtil.addErrorMessage("Pleace Select Patient Area");
@@ -3042,8 +3022,22 @@ public class BookingControllerViewScopeMonth implements Serializable {
             return;
         }
 
-        saveSelected(patient);
-        printingBill = saveBilledBill(reservedBooking);
+        // Hold SessionBookingLock from the capacity check until the bill (and its BillSession) is saved, as the
+        // main booking screen does, so two staff on this server cannot both take the last place (#25074).
+        // The lock is released by try-with-resources on every path, including early returns and exceptions.
+        try (SessionBookingLock.Hold hold = SessionBookingLock.acquire(selectedSessionInstance)) {
+            if (selectedSessionInstance.getMaxNo() != 0 && configOptionApplicationController.getBooleanValueByKey("Limited appoinments session can't get appoinement more than max amount.")) {
+                // Fresh recount of the booking rows plus open agent holds. The database row lock taken inside
+                // this call is released when it returns, so it is SessionBookingLock above that serialises the check and the save.
+                if (channelService.isSessionFullForNewBooking(selectedSessionInstance, reservedBooking)) {
+                    JsfUtil.addErrorMessage("Error: The maximum number of bookings (" + selectedSessionInstance.getMaxNo() + ") has been Reached.");
+                    return;
+                }
+            }
+
+            saveSelected(patient);
+            printingBill = saveBilledBill(reservedBooking);
+        }
         if (printingBill.getBillTypeAtomic().getBillFinanceType() == BillFinanceType.CASH_IN) {
             List<Payment> p = createPayment(printingBill, paymentMethod);
 
@@ -3106,18 +3100,11 @@ public class BookingControllerViewScopeMonth implements Serializable {
         e.setSendingMessage(createChanellBookingSms(printingBill));
         e.setDepartment(getSessionController().getLoggedUser().getDepartment());
         e.setInstitution(getSessionController().getLoggedUser().getInstitution());
-        e.setPending(false);
+        e.setPending(true);
         e.setSmsType(MessageType.ChannelBooking);
         getSmsFacade().create(e);
-        Boolean sent = smsManager.sendSms(e);
-        e.setSentSuccessfully(sent);
-        getSmsFacade().edit(e);
-
-        if (sent) {
-            JsfUtil.addSuccessMessage("SMS Sent");
-        } else {
-            JsfUtil.addSuccessMessage("SMS Failed");
-        }
+        // Sent after this request returns, so the settle does not wait for the SMS gateway (#24970)
+        smsManager.sendSavedSmsAsync(e.getId());
 
     }
 
@@ -4457,6 +4444,12 @@ public class BookingControllerViewScopeMonth implements Serializable {
         return "/channel/channel_session_activities?faces-redirect=true";
     }
 
+    // An API booking is counted by its completed bill, which has no paidBillSession of its own (#24927)
+    private boolean isApiCompletedBooking(BillSession bs) {
+        return bs.getBill() != null
+                && bs.getBill().getBillTypeAtomic() == BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_COMPLETED_PAYMENT;
+    }
+
     public void fillBillSessions() {
         selectedBillSession = null;
         BillType[] billTypes = {
@@ -4474,11 +4467,13 @@ public class BookingControllerViewScopeMonth implements Serializable {
                 + " where bs.retired=false"
                 + " and bs.bill.billType in :bts"
                 + " and type(bs.bill)=:class "
+                + " and (bs.bill.billTypeAtomic is null or bs.bill.billTypeAtomic != :bta) "
                 + " and bs.sessionInstance=:ss "
                 + " order by bs.serialNo ";
         HashMap<String, Object> hh = new HashMap<>();
         hh.put("bts", bts);
         hh.put("class", BilledBill.class);
+        hh.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hh.put("ss", getSelectedSessionInstance());
         billSessions = getBillSessionFacade().findByJpql(sql, hh, TemporalType.DATE);
 
@@ -4527,7 +4522,7 @@ public class BookingControllerViewScopeMonth implements Serializable {
 
                 // Additional check for paid status
                 try {
-                    if (bs.getPaidBillSession() != null) {
+                    if (bs.getPaidBillSession() != null || isApiCompletedBooking(bs)) {
                         paidPatientCount++;
                     }
                 } catch (NullPointerException npe) {
@@ -4556,7 +4551,7 @@ public class BookingControllerViewScopeMonth implements Serializable {
 
                 // Additional check for Oncall status
                 try {
-                    if (bs.getPaidBillSession() == null && !bs.getBill().isCancelled()) {
+                    if (bs.getPaidBillSession() == null && !bs.getBill().isCancelled() && !isApiCompletedBooking(bs)) {
                         onCallPatientCount++;
                     }
                 } catch (NullPointerException npe) {
@@ -4597,11 +4592,13 @@ public class BookingControllerViewScopeMonth implements Serializable {
                 + " where bs.retired=false"
                 + " and bs.bill.billType in :bts"
                 + " and type(bs.bill)=:class "
+                + " and (bs.bill.billTypeAtomic is null or bs.bill.billTypeAtomic != :bta) "
                 + " and bs.sessionInstance=:ss "
                 + " order by bs.serialNo ";
         HashMap<String, Object> hh = new HashMap<>();
         hh.put("bts", bts);
         hh.put("class", BilledBill.class);
+        hh.put("bta", BillTypeAtomic.CHANNEL_BOOKING_FOR_PAYMENT_ONLINE_PENDING_PAYMENT);
         hh.put("ss", s);
         tempBillSessions = getBillSessionFacade().findByJpql(sql, hh, TemporalType.DATE);
 
@@ -4650,7 +4647,7 @@ public class BookingControllerViewScopeMonth implements Serializable {
 
                 // Additional check for paid status
                 try {
-                    if (bs.getPaidBillSession() != null) {
+                    if (bs.getPaidBillSession() != null || isApiCompletedBooking(bs)) {
                         paidPatientCount++;
                     }
                 } catch (NullPointerException npe) {
@@ -4679,7 +4676,7 @@ public class BookingControllerViewScopeMonth implements Serializable {
 
                 // Additional check for Oncall status
                 try {
-                    if (bs.getPaidBillSession() == null && !bs.getBill().isCancelled()) {
+                    if (bs.getPaidBillSession() == null && !bs.getBill().isCancelled() && !isApiCompletedBooking(bs)) {
                         onCallPatientCount++;
                     }
                 } catch (NullPointerException npe) {
@@ -4970,32 +4967,6 @@ public class BookingControllerViewScopeMonth implements Serializable {
 
         BillSession savingBillSession;
         savingBillSession = createBillSession(savingBill, savingBillItem, false);
-
-        BillSession bs = new BillSession();
-        bs.setAbsent(false);
-        bs.setBill(savingBill);
-        bs.setBillItem(savingBillItem);
-        bs.setCreatedAt(new Date());
-        bs.setDepartment(getSelectedSessionInstance().getOriginatingSession().getDepartment());
-        bs.setInstitution(getSelectedSessionInstance().getOriginatingSession().getInstitution());
-        bs.setItem(getSelectedSessionInstance().getOriginatingSession());
-        bs.setSessionInstance(getSelectedSessionInstance());
-        bs.setSessionDate(getSelectedSessionInstance().getSessionDate());
-        bs.setSessionTime(getSelectedSessionInstance().getSessionTime());
-        bs.setStaff(getSelectedSessionInstance().getStaff());
-
-        List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(getSelectedSessionInstance().getOriginatingSession().getReserveNumbers());
-        Integer count;
-
-        count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers);
-
-        if (count != null) {
-            bs.setSerialNo(count);
-        } else {
-            bs.setSerialNo(1);
-        }
-
-        getBillSessionFacade().create(bs);
 
         List<BillFee> savingBillFees = new ArrayList<>();
 
@@ -5488,32 +5459,10 @@ public class BookingControllerViewScopeMonth implements Serializable {
         if (encryptedBillSessionId == null) {
             return;
         }
-
-        String decodedIdStr;
-        try {
-            decodedIdStr = URLDecoder.decode(encryptedBillSessionId, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            // Handle the exception, possibly with logging
-            return;
-        }
-        String securityKey = sessionController.getApplicationPreference().getEncrptionKey();
-        if (securityKey == null || securityKey.trim().equals("")) {
-            sessionController.getApplicationPreference().setEncrptionKey(securityController.generateRandomKey(10));
-            sessionController.savePreferences(sessionController.getApplicationPreference());
-        }
-
-        String idStr = securityController.decryptAlphanumeric(encryptedBillSessionId, securityKey);
-
-        if (idStr == null || idStr.trim().isEmpty()) {
-            // Handle the situation where decryption returns null or an empty string
-            return;
-        }
-
-        Long id;
-        try {
-            id = Long.parseLong(idStr);
-        } catch (NumberFormatException e) {
-            // Handle the exception, possibly with logging
+        // Signed, self-expiring token only (the alphanumeric encoding of a
+        // numeric id did not depend on the key).
+        Long id = securityController.decodeLinkId(SecurityController.LINK_SESSION, encryptedBillSessionId, sessionController);
+        if (id == null) {
             return;
         }
 
@@ -5803,26 +5752,28 @@ public class BookingControllerViewScopeMonth implements Serializable {
         bs.setStaff(getSelectedSessionInstance().getStaff());
 
         List<Integer> reservedNumbers = CommonFunctions.convertStringToIntegerList(getSelectedSessionInstance().getOriginatingSession().getReserveNumbers());
-        Integer count;
+        try (SessionBookingLock.Hold hold = SessionBookingLock.acquire(getSelectedSessionInstance())) {
+            Integer count;
 
-        if (forReservedNumbers) {
-            // Pass the selectedReservedBookingNumber to the service method
-            count = serviceSessionBean.getNextAvailableReservedNumber(getSelectedSessionInstance(), reservedNumbers, selectedReserverdBookingNumber);
-            if (count == null) {
+            if (forReservedNumbers) {
+                // Pass the selectedReservedBookingNumber to the service method
+                count = serviceSessionBean.getNextAvailableReservedNumber(getSelectedSessionInstance(), reservedNumbers, selectedReserverdBookingNumber);
+                if (count == null) {
+                    count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers);
+                    JsfUtil.addErrorMessage("No reserved numbers available. Normal number is given");
+                }
+            } else {
                 count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers);
-                JsfUtil.addErrorMessage("No reserved numbers available. Normal number is given");
             }
-        } else {
-            count = serviceSessionBean.getNextNonReservedSerialNumber(getSelectedSessionInstance(), reservedNumbers);
-        }
 
-        if (count != null) {
-            bs.setSerialNo(count);
-        } else {
-            bs.setSerialNo(1);
-        }
+            if (count != null) {
+                bs.setSerialNo(count);
+            } else {
+                bs.setSerialNo(1);
+            }
 
-        getBillSessionFacade().create(bs);
+            getBillSessionFacade().create(bs);
+        }
 
         return bs;
     }
@@ -6374,6 +6325,14 @@ public class BookingControllerViewScopeMonth implements Serializable {
             return true;
         }
 
+        // Fresh DB read; runs inside settleCredit()'s per-bill lock, so a concurrent
+        // settle of the same booking has either fully saved its paid bill or not started.
+        Bill currentBookingBill = getBillFacade().findWithoutCache(getBillSession().getBill().getId());
+        if (currentBookingBill != null && (currentBookingBill.getPaidAmount() != 0 || currentBookingBill.getPaidBill() != null)) {
+            JsfUtil.addErrorMessage("Payment Already Settled.");
+            return true;
+        }
+
         if (settlePaymentMethod == paymentMethod.OnCall) {
             JsfUtil.addErrorMessage("Settlement using 'On Call' is not allowed. Please select a different payment method.");
             return true;
@@ -6397,6 +6356,21 @@ public class BookingControllerViewScopeMonth implements Serializable {
     }
 
     public void settleCredit() {
+        if (getBillSession() == null || getBillSession().getBill() == null || getBillSession().getBill().getId() == null) {
+            JsfUtil.addErrorMessage("No booking selected to settle.");
+            return;
+        }
+        // Hold the lock across the already-paid check AND every settlement write,
+        // otherwise two submits can both pass the check before either saves (#23776).
+        // Shares BookingControllerViewScope's locks, so a By Date and a By Month
+        // settle of the same booking also serialize.
+        Long bookingBillId = getBillSession().getBill().getId();
+        synchronized (BookingControllerViewScope.SETTLE_LOCKS[(int) Math.floorMod(bookingBillId, (long) BookingControllerViewScope.SETTLE_LOCKS.length)]) {
+            settleCreditUnderLock();
+        }
+    }
+
+    private void settleCreditUnderLock() {
         if (errorCheckForSettle()) {
             return;
         }
@@ -7697,34 +7671,64 @@ public class BookingControllerViewScopeMonth implements Serializable {
         quickSearchPatientList = null;
     }
 
-//    @Override
+    /**
+     * Saves the patient without validation or messages. The booking flow calls
+     * this just before it saves the bill, and it has its own checks (a phone is
+     * optional there when the institution allows it). The Save Patient Details
+     * button goes through {@link #saveSelectedPatient()}, which validates first.
+     */
+    @Override
     public void saveSelected(Patient p) {
-        if (patient == null) {
+        Patient target = (p != null) ? p : this.patient;
+        if (target == null || target.getPerson() == null) {
             return;
         }
-        if (patient.getPerson() == null) {
-            return;
-        }
-        if (patient.getPerson().getId() == null) {
-            patient.getPerson().setCreatedAt(new Date());
-            patient.getPerson().setCreater(sessionController.getLoggedUser());
-            personFacade.create(patient.getPerson());
+        target.getPerson().fillDobFromAgeComponentsIfMissing();
+
+        Person person = target.getPerson();
+        if (person.getId() == null) {
+            person.setCreatedAt(new Date());
+            person.setCreater(sessionController.getLoggedUser());
+            if (target.getId() != null) {
+                // Existing patient: the patient is merged below, which cascades a merge, so a
+                // brand-new person still has to be persisted here.
+                personFacade.create(person);
+            }
+            // New patient: the person is persisted by the cascade from Patient.person
+            // (cascade = ALL) in patientFacade.create below. Persisting it here too leaves an
+            // unreferenced duplicate PERSON row (#23900).
         } else {
-            personFacade.edit(patient.getPerson());
+            personFacade.edit(person);
         }
-        if (patient.getId() == null) {
-            patient.setCreatedAt(new Date());
-            patient.setCreatedInstitution(sessionController.getInstitution());
-            patient.setCreater(sessionController.getLoggedUser());
-            patientFacade.create(patient);
+        if (target.getId() == null) {
+            target.setCreatedAt(new Date());
+            target.setCreatedInstitution(sessionController.getInstitution());
+            target.setCreater(sessionController.getLoggedUser());
+            patientFacade.create(target);
         } else {
-            patientFacade.edit(patient);
+            patientFacade.edit(target);
         }
     }
 
-//    @Override
+    /**
+     * The Save Patient Details button: validates, saves, closes the edit panel
+     * and tells the user.
+     */
+    @Override
     public void saveSelectedPatient() {
-        saveSelected(patient);
+        Patient target = this.patient;
+        if (target != null && target.getPerson() != null) {
+            target.getPerson().fillDobFromAgeComponentsIfMissing();
+        }
+        String error = ChannelPatientValidationRules.validatePatientForSave(target);
+        if (error != null) {
+            JsfUtil.addErrorMessage(error);
+            return;
+        }
+        boolean isNew = target.getId() == null;
+        saveSelected(target);
+        setPatientDetailsEditable(false);
+        JsfUtil.addSuccessMessage(isNew ? "Patient details saved successfully" : "Patient details updated successfully");
     }
 
 //    @Override

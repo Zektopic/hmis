@@ -164,6 +164,8 @@ public class PatientController implements Serializable, ControllerWithPatient {
     @Inject
     PracticeBookingController practiceBookingController;
     @Inject
+    RelationController relationController;
+    @Inject
     PatientEncounterController patientEncounterController;
     @Inject
     OpticianSaleController opticianSaleController;
@@ -2379,6 +2381,7 @@ public class PatientController implements Serializable, ControllerWithPatient {
             return null;
         }
         familyMembers = membershipService.fetchFamilyMembers(currentFamily);
+        relationController.refreshItems();
         return "/membership/family_membership_manage?faces-redirect=true";
     }
 
@@ -2389,6 +2392,7 @@ public class PatientController implements Serializable, ControllerWithPatient {
         }
         currentFamily = family;
         familyMembers = membershipService.fetchFamilyMembers(currentFamily);
+        relationController.refreshItems();
         return "/membership/family_membership_manage?faces-redirect=true";
     }
 
@@ -2718,6 +2722,11 @@ public class PatientController implements Serializable, ControllerWithPatient {
             getFamilyFacade().create(currentFamily);
             JsfUtil.addSuccessMessage("Family Added");
         } else {
+            for (FamilyMember familyMember : currentFamily.getFamilyMembers()) {
+                if (familyMember.getRelationToChh() == null) {
+                    restoreSavedFamilyMemberRelation(familyMember);
+                }
+            }
             currentFamily.setEditedAt(new Date());
             currentFamily.setEditer(getSessionController().getLoggedUser());
             getFamilyFacade().edit(currentFamily);
@@ -2912,6 +2921,10 @@ public class PatientController implements Serializable, ControllerWithPatient {
             JsfUtil.addErrorMessage("No relationship.");
             return;
         }
+        if (isAlreadyFamilyMember(currentFamily, current)) {
+            JsfUtil.addErrorMessage("This family member has already been added.");
+            return;
+        }
         current.getPerson().setMembershipScheme(currentFamily.getMembershipScheme());
         save(current);
         saveFamily();
@@ -2935,6 +2948,37 @@ public class PatientController implements Serializable, ControllerWithPatient {
         currentRelation = null;
     }
 
+    /**
+     * True when the patient (same record, same NIC, or same PHN, the member's
+     * number) is already an active member of the family (#16299).
+     */
+    private boolean isAlreadyFamilyMember(Family family, Patient patient) {
+        if (family == null || patient == null || family.getFamilyMembers() == null) {
+            return false;
+        }
+        String nic = patient.getPerson() == null || patient.getPerson().getNic() == null
+                ? "" : patient.getPerson().getNic().trim();
+        String phn = patient.getPhn() == null ? "" : patient.getPhn().trim();
+        for (FamilyMember fm : family.getFamilyMembers()) {
+            if (fm == null || fm.isRetired() || fm.getPatient() == null) {
+                continue;
+            }
+            Patient existing = fm.getPatient();
+            if (existing == patient || (patient.getId() != null && patient.getId().equals(existing.getId()))) {
+                return true;
+            }
+            if (!nic.isEmpty() && existing.getPerson() != null && existing.getPerson().getNic() != null
+                    && nic.equalsIgnoreCase(existing.getPerson().getNic().trim())) {
+                return true;
+            }
+            if (!phn.isEmpty() && existing.getPhn() != null
+                    && phn.equalsIgnoreCase(existing.getPhn().trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void removeFamilyMember() {
         if (currentFamily == null) {
             JsfUtil.addErrorMessage("No Family Selected.");
@@ -2950,6 +2994,32 @@ public class PatientController implements Serializable, ControllerWithPatient {
             JsfUtil.addSuccessMessage("Removed");
         } catch (Error e) {
             JsfUtil.addErrorMessage("Error in removing. " + e.getMessage());
+        }
+    }
+
+    public void updateFamilyMemberRelation(FamilyMember familyMember) {
+        if (familyMember == null || familyMember.getId() == null) {
+            JsfUtil.addErrorMessage("No Member is selected to update.");
+            return;
+        }
+        if (familyMember.getRelationToChh() == null) {
+            restoreSavedFamilyMemberRelation(familyMember);
+            JsfUtil.addErrorMessage("No relationship.");
+            return;
+        }
+        familyMember.setEditedAt(new Date());
+        familyMember.setEditer(sessionController.getLoggedUser());
+        getFamilyMemberFacade().edit(familyMember);
+        JsfUtil.addSuccessMessage("Relationship Updated");
+    }
+
+    private void restoreSavedFamilyMemberRelation(FamilyMember familyMember) {
+        if (familyMember.getId() == null) {
+            return;
+        }
+        FamilyMember savedFamilyMember = getFamilyMemberFacade().find(familyMember.getId());
+        if (savedFamilyMember != null) {
+            familyMember.setRelationToChh(savedFamilyMember.getRelationToChh());
         }
     }
 
@@ -2988,15 +3058,18 @@ public class PatientController implements Serializable, ControllerWithPatient {
                 p.setRetired(true);
                 p.setRetirer(getSessionController().getLoggedUser());
                 p.setRetiredAt(new Date());
-                getPersonFacade().edit(p);
 
+                // Person.webUser cascades on merge, so the WebUser must be changed before the Person is saved
                 WebUser u = p.getWebUser();
                 if (u != null) {
                     u.setActivated(false);
+                    u.setActivatedAt(new Date());
+                    u.setActivator(getSessionController().getLoggedUser());
                     u.setRetired(true);
                     u.setRetiredAt(new Date());
                     u.setRetirer(getSessionController().getLoggedUser());
                 }
+                getPersonFacade().edit(p);
 
             }
             currentFamily.setRetired(true);
