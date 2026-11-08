@@ -242,7 +242,11 @@ public class PackageItemFeeController implements Serializable {
     public List<PackageFee> getCharges() {
 
         if (currentIx != null && currentIx.getId() != null) {
-            setCharges(getPackageFeeFacade().findByJpql("select c from PackageFee c where c.retired = false and c.packege.id=" + getCurrentPackege().getId() + " and c.item.id = " + currentIx.getId()));
+            // Fix JPQL injection vulnerability by using parameterized queries
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("packegeId", getCurrentPackege().getId());
+            m.put("itemId", currentIx.getId());
+            setCharges(getPackageFeeFacade().findByJpql("select c from PackageFee c where c.retired = false and c.packege.id=:packegeId and c.item.id=:itemId", m));
 
         } else {
             setCharges(new ArrayList<PackageFee>());
