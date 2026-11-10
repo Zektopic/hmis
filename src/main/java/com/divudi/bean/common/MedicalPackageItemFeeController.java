@@ -242,7 +242,11 @@ public class MedicalPackageItemFeeController implements Serializable {
     public List<MedicalPackageFee> getCharges() {
 
         if (currentIx != null && currentIx.getId() != null) {
-            setCharges(getMedicalPackageFeeFacade().findByJpql("select c from MedicalPackageFee c where c.retired = false and c.packege.id=" + currentPackege.getId() + " and c.item.id = " + currentIx.getId()));
+            // SECURITY: Fixing JPQL injection by using a parameterized query map
+            java.util.Map<String, Object> m = new java.util.HashMap<>();
+            m.put("pid", currentPackege.getId());
+            m.put("iid", currentIx.getId());
+            setCharges(getMedicalPackageFeeFacade().findByJpql("select c from MedicalPackageFee c where c.retired = false and c.packege.id=:pid and c.item.id = :iid", m));
 
         } else {
             setCharges(new ArrayList<MedicalPackageFee>());
