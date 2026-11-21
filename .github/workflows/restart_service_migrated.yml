@@ -1,5 +1,7 @@
 name: "Restart a service (India South Central)"
 
+permissions: {}
+
 on:
   workflow_dispatch:
     inputs:
@@ -66,12 +68,17 @@ jobs:
       # ── resolve target -> VM, IP secret, key, context root ──────────────
       - name: Work out what is being restarted
         id: t
+        env:
+          INPUT_ACTION: ${{ inputs.action }}
+          INPUT_HOSPITAL: ${{ inputs.hospital_target }}
+          INPUT_VM: ${{ inputs.vm_target }}
+          INPUT_CONFIRM: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
-          ACTION="${{ inputs.action }}"
+          ACTION="$INPUT_ACTION"
 
           if [ "$ACTION" = "hospital" ]; then
-            TARGET="${{ inputs.hospital_target }}"
+            TARGET="$INPUT_HOSPITAL"
             # Context roots are NOT always the hospital name: ruhunu serves /rh,
             # rhdrawer serves /drawer. asadmin needs the context root.
             case "$TARGET" in
@@ -98,7 +105,7 @@ jobs:
               *) echo "::error::unknown hospital $TARGET"; exit 1 ;;
             esac
           else
-            TARGET="${{ inputs.vm_target }}"
+            TARGET="$INPUT_VM"
             case "$TARGET" in
               vm-hmis-shared1-prod) VM=shared1 ;;
               vm-hmis-shared2-prod) VM=shared2 ;;
@@ -112,8 +119,8 @@ jobs:
 
           # Typing the name again is the only thing standing between a stray
           # click and six hospitals going down at once.
-          if [ "${{ inputs.confirm }}" != "$TARGET" ]; then
-            echo "::error::confirm was '${{ inputs.confirm }}' but the target is '$TARGET'"
+          if [ "$INPUT_CONFIRM" != "$TARGET" ]; then
+            echo "::error::confirm was '$INPUT_CONFIRM' but the target is '$TARGET'"
             exit 1
           fi
 
